@@ -9,8 +9,28 @@ int main(int argc, char **argv)
   {
     String sample_program =
       STR(
+        "typedef struct Foo_s\n"
+        "{\n"
+        "  int boo;\n"
+        "  char bar;\n"
+        "} Foo;\n"
+        "};\n"
+        "typedef enum Baz_e\n"
+        "{\n"
+        "  BAZ_BOO,\n"
+        "  BAZ_BAR,\n"
+        "  BAZ_BAR2,\n"
+        "} Baz;\n"
+        "};\n"
         "int main(int argc, char **argv)\n"
         "{\n"
+        "  // I'm a comment!\n"
+        "  /* I'm a comment, too! */\n"
+        "  long l = 2L;\n"
+        "  long ull = 10000ulL;\n"
+        "  float f = 0.11f;\n"
+        "  double d = 0.111;\n"
+        "  int intensity = 0x1000;\n"
         "  int i = 1;\n"
         "  int j = i++;\n"
         "  if (i == j)\n"
@@ -37,7 +57,7 @@ int main(int argc, char **argv)
     {
       C_Token token = tokens.v[token_idx];
       printf("Token %lu: %s [ %.*s ]\n",
-             token_idx, C_Token_Type_strings[token.type], STRF(token.value));
+             token_idx, C_Token_Type_strings[token.type], STRF(token.raw));
     }
   }
 }

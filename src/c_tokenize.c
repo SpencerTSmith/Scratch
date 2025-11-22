@@ -1,5 +1,7 @@
 #include "common.h"
 
+// TODO: Evaluate literals, escapes, numbers into right types, etc.
+
 #define C_Token_Type(X)               \
   X(C_TOKEN_NONE)                     \
   X(C_TOKEN_OPEN_PARENTHESIS)         \
@@ -35,6 +37,7 @@
   X(C_TOKEN_LOGICAL_AND)              \
   X(C_TOKEN_LOGICAL_OR)               \
   X(C_TOKEN_LITERAL_STRING)           \
+  X(C_TOKEN_LITERAL_CHAR)             \
   X(C_TOKEN_LITERAL_INT)              \
   X(C_TOKEN_KEYWORD_FOR)              \
   X(C_TOKEN_KEYWORD_WHILE)            \
@@ -292,7 +295,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         {
           usize end = lexer.at + 1;
 
-          for (u8 c = lexer.source.v[end];
+          for (u8 c = curr_char;
                c_lexer_in_bounds(lexer, end) && c_lexer_char_valid_for_identifier(c);
                end++, c = lexer.source.v[end]) {} // Ha, all in the for
 
@@ -305,17 +308,16 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         usize end = lexer.at + 1;
 
         u8 prev = 0;
-        for (u8 c = lexer.source.v[end];
-             c_lexer_in_bounds(lexer, end);
-             end++, c = lexer.source.v[end])
+        while (c_lexer_in_bounds(lexer, end))
         {
-          // TODO: Evaluate escapes
+          u8 c = lexer.source.v[end];
           if (c == '"' && prev != '\\')
           {
             end++;
             break;
           }
           prev = c;
+          end++;
         }
 
         token.type  = C_TOKEN_LITERAL_STRING;
@@ -323,11 +325,48 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
       }
       else if (curr_char == '\'') // Character literal
       {
+        usize end = lexer.at + 1;
 
+        u8 prev = 0;
+        while (c_lexer_in_bounds(lexer, end))
+        {
+          u8 c = lexer.source.v[end];
+          if (c == '\'' && prev != '\\')
+          {
+            end++;
+            break;
+          }
+          prev = c;
+          end++;
+        }
+
+        token.type  = C_TOKEN_LITERAL_CHAR;
+        token.value = string_substring(lexer.source, lexer.at, end);
       }
       else if (char_is_digit(curr_char)) // Number literal
       {
+        usize end = lexer.at + 1;
+        while (c_lexer_in_bounds(lexer, end))
+        {
+          u8 c = lexer.source.v[end];
+          if (char_is_digit(c) || c == '.' || c == 'E' || c == 'e' || c == '-')
+          {
+            end++;
+          }
+          else
+          {
+            break;
+          }
 
+          if (end == 'L')
+          {
+
+          }
+          else if (end == 'f')
+          {
+
+          }
+        }
       }
     }
 

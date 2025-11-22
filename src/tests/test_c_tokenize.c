@@ -25,6 +25,8 @@ int main(int argc, char **argv)
         "  }\n"
         "  j = i * j;\n"
         "  j = ~j;\n"
+        "  char c = '0';\n"
+        "  char escape = '\\'';\n"
         "  printf(\"Hello, \\\"world!\\\"\\n\");\n"
         "  return 0;\n"
         "}\n"

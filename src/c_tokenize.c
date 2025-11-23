@@ -1,12 +1,12 @@
 #include "common.h"
 
-// TODO: Evaluate literals, escapes, numbers into right types, etc.
+// TODO: Evaluate literals, escapes, etc.
 
 #define C_Token_Type(X)                 \
   X(C_TOKEN_NONE)                       \
-  X(C_TOKEN_BEGIN_PARENTHESIS)           \
-  X(C_TOKEN_BEGIN_CURLY_BRACE)           \
-  X(C_TOKEN_BEGIN_SQUARE_BRACE)          \
+  X(C_TOKEN_BEGIN_PARENTHESIS)          \
+  X(C_TOKEN_BEGIN_CURLY_BRACE)          \
+  X(C_TOKEN_BEGIN_SQUARE_BRACE)         \
   X(C_TOKEN_CLOSE_PARENTHESIS)          \
   X(C_TOKEN_CLOSE_CURLY_BRACE)          \
   X(C_TOKEN_CLOSE_SQUARE_BRACE)         \
@@ -30,10 +30,17 @@
   X(C_TOKEN_COMMA)                      \
   X(C_TOKEN_SEMICOLON)                  \
   X(C_TOKEN_DOT)                        \
-  X(C_TOKEN_NOT)                        \
+  X(C_TOKEN_ARROW)                      \
+  X(C_TOKEN_BITWISE_NOT)                \
   X(C_TOKEN_DECREMENT)                  \
   X(C_TOKEN_INCREMENT)                  \
   X(C_TOKEN_COMPARE_EQUAL)              \
+  X(C_TOKEN_LESS_THAN)                  \
+  X(C_TOKEN_LESS_THAN_EQUAL)            \
+  X(C_TOKEN_GREATER_THAN)               \
+  X(C_TOKEN_GREATER_THAN_EQUAL)         \
+  X(C_TOKEN_LOGICAL_NOT)                \
+  X(C_TOKEN_COMPARE_NOT_EQUAL)          \
   X(C_TOKEN_LOGICAL_AND)                \
   X(C_TOKEN_LOGICAL_OR)                 \
   X(C_TOKEN_LITERAL_STRING)             \
@@ -64,6 +71,7 @@
   X(C_TOKEN_KEYWORD_TYPEDEF)            \
   X(C_TOKEN_KEYWORD_CONST)              \
   X(C_TOKEN_KEYWORD_STATIC)             \
+  X(C_TOKEN_KEYWORD_RESTRICT)           \
   X(C_TOKEN_KEYWORD_EXTERN)             \
   X(C_TOKEN_KEYWORD_INLINE)             \
   X(C_TOKEN_KEYWORD_SIZEOF)             \
@@ -100,6 +108,8 @@ struct C_Lexer
 {
   String source;
   usize  at;
+  usize  lines_processed;
+  usize  columns_processed;
 };
 
 // Single character tokens... some special logic required for e.g. =,&,| (could be ==,&&,||)
@@ -108,11 +118,11 @@ struct C_Lexer
 // We use the 3rd of the triple
 static C_Token_Type c_token_table[][3] =
 {
-  ['('] = {C_TOKEN_BEGIN_PARENTHESIS,   C_TOKEN_NONE,          C_TOKEN_NONE},
+  ['('] = {C_TOKEN_BEGIN_PARENTHESIS,  C_TOKEN_NONE,          C_TOKEN_NONE},
   [')'] = {C_TOKEN_CLOSE_PARENTHESIS,  C_TOKEN_NONE,          C_TOKEN_NONE},
-  ['{'] = {C_TOKEN_BEGIN_CURLY_BRACE,   C_TOKEN_NONE,          C_TOKEN_NONE},
+  ['{'] = {C_TOKEN_BEGIN_CURLY_BRACE,  C_TOKEN_NONE,          C_TOKEN_NONE},
   ['}'] = {C_TOKEN_CLOSE_CURLY_BRACE,  C_TOKEN_NONE,          C_TOKEN_NONE},
-  ['['] = {C_TOKEN_BEGIN_SQUARE_BRACE,  C_TOKEN_NONE,          C_TOKEN_NONE},
+  ['['] = {C_TOKEN_BEGIN_SQUARE_BRACE, C_TOKEN_NONE,          C_TOKEN_NONE},
   [']'] = {C_TOKEN_CLOSE_SQUARE_BRACE, C_TOKEN_NONE,          C_TOKEN_NONE},
 
   ['+'] = {C_TOKEN_ADD,                C_TOKEN_INCREMENT,     C_TOKEN_ADD_ASSIGN},
@@ -120,7 +130,7 @@ static C_Token_Type c_token_table[][3] =
   ['*'] = {C_TOKEN_STAR,               C_TOKEN_NONE,          C_TOKEN_MULTIPLY_ASSIGN},
   ['/'] = {C_TOKEN_DIVIDE,             C_TOKEN_NONE,          C_TOKEN_DIVIDE_ASSIGN},
   ['%'] = {C_TOKEN_MODULO,             C_TOKEN_NONE,          C_TOKEN_MODULO_ASSIGN},
-  ['~'] = {C_TOKEN_NOT,                C_TOKEN_NONE,          C_TOKEN_NONE},
+  ['~'] = {C_TOKEN_BITWISE_NOT,        C_TOKEN_NONE,          C_TOKEN_NONE},
   ['^'] = {C_TOKEN_XOR,                C_TOKEN_NONE,          C_TOKEN_XOR_ASSIGN},
   ['&'] = {C_TOKEN_BITWISE_AND,        C_TOKEN_LOGICAL_AND,   C_TOKEN_AND_ASSIGN},
   ['|'] = {C_TOKEN_BITWISE_OR,         C_TOKEN_LOGICAL_OR,    C_TOKEN_OR_ASSIGN},
@@ -128,6 +138,10 @@ static C_Token_Type c_token_table[][3] =
   [','] = {C_TOKEN_COMMA,              C_TOKEN_NONE,          C_TOKEN_NONE},
   [';'] = {C_TOKEN_SEMICOLON,          C_TOKEN_NONE,          C_TOKEN_NONE},
   ['.'] = {C_TOKEN_DOT,                C_TOKEN_NONE,          C_TOKEN_NONE},
+
+  ['<'] = {C_TOKEN_LESS_THAN,          C_TOKEN_NONE,          C_TOKEN_LESS_THAN_EQUAL},
+  ['>'] = {C_TOKEN_GREATER_THAN,       C_TOKEN_NONE,          C_TOKEN_GREATER_THAN_EQUAL},
+  ['!'] = {C_TOKEN_LOGICAL_NOT,        C_TOKEN_NONE,          C_TOKEN_COMPARE_NOT_EQUAL},
 };
 
 typedef struct C_Keyword_Info C_Keyword_Info;
@@ -158,6 +172,7 @@ static C_Keyword_Info c_keywords[] =
   {STR("const"),    C_TOKEN_KEYWORD_CONST},
   {STR("static"),   C_TOKEN_KEYWORD_STATIC},
   {STR("extern"),   C_TOKEN_KEYWORD_EXTERN},
+  {STR("restrict"), C_TOKEN_KEYWORD_RESTRICT},
   {STR("inline"),   C_TOKEN_KEYWORD_INLINE},
   {STR("sizeof"),   C_TOKEN_KEYWORD_SIZEOF},
   {STR("register"), C_TOKEN_KEYWORD_REGISTER},
@@ -196,58 +211,85 @@ u8 *c_lexer_at(C_Lexer lexer)
 static
 void c_lexer_advance(C_Lexer *lexer, usize count)
 {
+  lexer->columns_processed += count;
   lexer->at += count;
 }
 
 static
-void c_lexer_eat_whitespace_and_comments(C_Lexer *lexer)
+void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
 {
   while (c_lexer_incomplete(*lexer))
   {
     u8 curr_char = *c_lexer_at(*lexer);
-    if (curr_char == '/')
+
+    // Count lines... reset columns, advance
+    if (curr_char == '\n')
     {
       c_lexer_advance(lexer, 1);
+      lexer->lines_processed += 1;
+      lexer->columns_processed = 0;
+    }
+    else if (curr_char == '/' && c_lexer_in_bounds(*lexer, lexer->at + 1))
+    {
+      u8 next_char = c_lexer_at(*lexer)[1];
 
-      if (c_lexer_incomplete(*lexer))
+      if (next_char == '/') // Single line
       {
-        u8 next_char = *c_lexer_at(*lexer);
-
-        if (next_char == '/') // Single line
+        while (c_lexer_incomplete(*lexer))
         {
-          while (c_lexer_incomplete(*lexer))
+          u8 c = *c_lexer_at(*lexer);
+
+          if (c == '\n')
           {
-            u8 c = *c_lexer_at(*lexer);
-            c_lexer_advance(lexer, 1);
-
-            if (c == '\n')
-            {
-              break;
-            }
+            break;
           }
-        }
-        else if (next_char == '*') // Multiple line
-        {
-          u8 prev = 0;
 
-          while (c_lexer_incomplete(*lexer))
-          {
-            u8 c = *c_lexer_at(*lexer);
-            c_lexer_advance(lexer, 1);
-
-            if (prev == '*' && c == '/')
-            {
-              break;
-            }
-
-            prev = c;
-          }
+          c_lexer_advance(lexer, 1);
         }
       }
+      else if (next_char == '*') // Multiple line
+      {
+        u8 prev = 0;
+
+        while (c_lexer_incomplete(*lexer))
+        {
+          u8 c = *c_lexer_at(*lexer);
+
+          // Stick with the normal c behavior where you can't nest these :(
+          // could just keep a counter of how many begin blocks we find...
+          // but that's not what c does...
+          if (prev == '*' && c == '/')
+          {
+            break;
+          }
+
+          c_lexer_advance(lexer, 1);
+
+          prev = c;
+        }
+      }
+      else
+      {
+        break;
+      }
     }
-    else if (char_is_whitespace(curr_char))
+    else if (char_is_whitespace(curr_char)) // Catch all other whitespace
     {
       c_lexer_advance(lexer, 1);
+    }
+    else if (curr_char == '#')
+    {
+      while (c_lexer_incomplete(*lexer))
+      {
+        u8 c = *c_lexer_at(*lexer);
+
+        if (c == '\n')
+        {
+          break;
+        }
+
+        c_lexer_advance(lexer, 1);
+      }
     }
     else
     {
@@ -267,9 +309,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     .at = 0,
   };
 
-  // TODO: Not thrilled about this comma operator here, but can't think of anything nicer
-  // to do yet
-  while (c_lexer_eat_whitespace_and_comments(&lexer), c_lexer_incomplete(lexer))
+  while (c_lexer_eat_whitespace_comments_preprocessor(&lexer), c_lexer_incomplete(lexer))
   {
     u8 curr_char = *c_lexer_at(lexer);
 
@@ -282,11 +322,12 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
     if (token.type != C_TOKEN_NONE) // Match from the table!
     {
-      b32 could_be_double = c_token_table[curr_char][1] != C_TOKEN_NONE; // e.g. &&
-      b32 could_be_assign = c_token_table[curr_char][2] != C_TOKEN_NONE; // e.g. &=
+      b32 could_be_arrow  = c_token_table[curr_char][0] == C_TOKEN_MINUS; // only ->
+      b32 could_be_double = c_token_table[curr_char][1] != C_TOKEN_NONE;  // e.g. &&
+      b32 could_be_equals = c_token_table[curr_char][2] != C_TOKEN_NONE;  // e.g. &=
 
       usize token_length = 1; // Could actually be 2 after we check the above cases!
-      if ((could_be_double || could_be_assign) && c_lexer_in_bounds(lexer, lexer.at + 1))
+      if ((could_be_double || could_be_equals || could_be_arrow) && c_lexer_in_bounds(lexer, lexer.at + 1))
       {
         u8 next_char = lexer.source.v[lexer.at + 1];
         if (could_be_double && next_char == curr_char)
@@ -294,9 +335,14 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           token.type = c_token_table[curr_char][1];
           token_length = 2;
         }
-        else if (could_be_assign && next_char == '=')
+        else if (could_be_equals && next_char == '=')
         {
           token.type = c_token_table[curr_char][2];
+          token_length = 2;
+        }
+        else if (could_be_arrow && next_char == '>')
+        {
+          token.type = C_TOKEN_ARROW;
           token_length = 2;
         }
       }
@@ -314,7 +360,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           u8 c = lexer.source.v[end];
           if (char_is_alphabetic(c) || char_is_digit(c) || c == '_')
           {
-            end++;
+            end += 1;
           }
           else
           {
@@ -351,17 +397,17 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           u8 c = lexer.source.v[end];
           if (c == '"' && escape_count % 2 == 0)
           {
-            end++;
+            end += 1;
             break;
           }
           else if (c == '\\')
           {
-            end++;
-            escape_count++;
+            end += 1;
+            escape_count += 1;
           }
           else
           {
-            end++;
+            end += 1;
             escape_count = 0; // We encountered something else, reset escape count
           }
         }
@@ -373,17 +419,25 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
       {
         usize end = lexer.at + 1;
 
-        u8 prev = 0;
+        usize escape_count = 0;
         while (c_lexer_in_bounds(lexer, end))
         {
           u8 c = lexer.source.v[end];
-          if (c == '\'' && prev != '\\')
+          if (c == '\'' && escape_count % 2 == 0)
           {
-            end++;
+            end += 1;
             break;
           }
-          prev = c;
-          end++;
+          else if (c == '\\')
+          {
+            end += 1;
+            escape_count += 1;
+          }
+          else
+          {
+            end += 1;
+            escape_count = 0; // We encountered something else, reset escape count
+          }
         }
 
         token.type = C_TOKEN_LITERAL_CHAR;
@@ -401,33 +455,33 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           u8 c = lexer.source.v[end];
           if (c == 'x' || c == 'X')
           {
-            end++;
+            end += 1;
             // TODO: Base
           }
           else if (c == 'b' || c == 'B')
           {
-            end++;
+            end += 1;
             // TODO: Base
           }
           else if (char_is_digit(c))
           {
-            end++;
+            end += 1;
           }
           else if (c == '.' || c == 'E' || c == 'e')
           {
             token.type = C_TOKEN_LITERAL_DOUBLE;
-            end++;
+            end += 1;
           }
           else if (c == 'f' || c == 'F') // float, marks end, so break
           {
             token.type = C_TOKEN_LITERAL_FLOAT;
-            end++;
+            end += 1;
             break;
           }
           else if (c == 'u' || c == 'U') // unsigned, unsigned long, or unsigned long long, marks the end, so break after
           {
             token.type = C_TOKEN_LITERAL_UNSIGNED_INT;
-            end++;
+            end += 1;
 
             if (c_lexer_in_bounds(lexer, end))
             {
@@ -435,14 +489,14 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
               if (c == 'l' || c == 'L')
               {
                 token.type = C_TOKEN_LITERAL_UNSIGNED_LONG;
-                end++;
+                end += 1;
 
                 if (c_lexer_in_bounds(lexer, end))
                 {
                   c = lexer.source.v[end];
                   if (c == 'L')
                   {
-                    end++;
+                    end += 1;
                     token.type = C_TOKEN_LITERAL_UNSIGNED_LONG_LONG;
                   }
                 }
@@ -454,7 +508,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           else if (c == 'l' || c == 'L') // long or long long, marks the end, so break after
           {
             token.type = C_TOKEN_LITERAL_LONG;
-            end++;
+            end += 1;
 
             if (c_lexer_in_bounds(lexer, end))
             {
@@ -462,7 +516,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
               if (c == 'l' || c == 'L')
               {
                 token.type = C_TOKEN_LITERAL_LONG_LONG;
-                end++;
+                end += 1;
               }
             }
 
@@ -483,6 +537,10 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     {
       array_add(arena, result, token);
       advance = token.raw.count;
+    }
+    else
+    {
+      LOG_ERROR("Unkown token encountered at line: %lu, column: %lu", lexer.lines_processed + 1, lexer.columns_processed + 1);
     }
 
     c_lexer_advance(&lexer, advance);

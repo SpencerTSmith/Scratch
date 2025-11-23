@@ -97,13 +97,21 @@ typedef struct C_Token C_Token;
 struct C_Token
 {
   C_Token_Type type;
+
   String raw;
+  usize  line;
+  usize  column;
 
   union
   {
-    u64 _int;
-    f64 _float;
-  } value;
+    struct
+    {
+      u8  base;
+      u64 v;
+    } int_literal;
+    u8  char_literal;
+    u64 float_literal;
+  };
 };
 
 typedef struct C_Lexer C_Lexer;
@@ -262,6 +270,14 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
         while (c_lexer_incomplete(*lexer))
         {
           u8 c = *c_lexer_at(*lexer);
+
+          // FIXME: Not thrilled about having to handle new lines in more than one place.
+          if (curr_char == '\n')
+          {
+            lexer->lines_processed += 1;
+            lexer->columns_processed = 0;
+          }
+
           c_lexer_advance(lexer, 1);
 
           // Stick with the normal c behavior where you can't nest these :(
@@ -321,6 +337,8 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     u8 curr_char = *c_lexer_at(lexer);
 
     C_Token token = {0};
+    token.line   = lexer.lines_processed + 1;
+    token.column = lexer.columns_processed + 1;
 
     if (curr_char < STATIC_COUNT(c_token_table))
     {
@@ -356,188 +374,207 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
       token.raw = string_substring(lexer.source, lexer.at, lexer.at + token_length);
     }
-    else
+    else if (char_is_alphabetic(curr_char) || curr_char == '_') // Identifier or keyword
     {
-      if (char_is_alphabetic(curr_char) || curr_char == '_') // Identifier or keyword
-      {
-        usize end = lexer.at + 1;
+      usize end = lexer.at + 1;
 
-        while (c_lexer_in_bounds(lexer, end))
+      while (c_lexer_in_bounds(lexer, end))
+      {
+        u8 c = lexer.source.v[end];
+        if (char_is_alphabetic(c) || char_is_digit(c) || c == '_')
         {
-          u8 c = lexer.source.v[end];
-          if (char_is_alphabetic(c) || char_is_digit(c) || c == '_')
+          end += 1;
+        }
+        else
+        {
+          break;
+        }
+      }
+
+      token.raw  = string_substring(lexer.source, lexer.at, end);
+
+      // Check for keyword match, probably too few keywords to see benefit from hashing
+      for (usize keyword_idx = 0; keyword_idx < STATIC_COUNT(c_keywords); keyword_idx += 1)
+      {
+        C_Keyword_Info keyword = c_keywords[keyword_idx];
+
+        if (string_match(keyword.string, token.raw))
+        {
+          token.type = c_keywords[keyword_idx].type;
+        }
+      }
+
+      // Not a keyword, must be an identifier
+      if (token.type == C_TOKEN_NONE)
+      {
+        token.type = C_TOKEN_IDENTIFIER;
+      }
+    }
+    else if (curr_char == '"') // String literal
+    {
+      usize end = lexer.at + 1;
+
+      usize escape_count = 0;
+      while (c_lexer_in_bounds(lexer, end))
+      {
+        u8 c = lexer.source.v[end];
+        if (c == '"' && escape_count % 2 == 0)
+        {
+          end += 1;
+          break;
+        }
+        else if (c == '\\')
+        {
+          end += 1;
+          escape_count += 1;
+        }
+        else
+        {
+          end += 1;
+          escape_count = 0; // We encountered something else, reset escape count
+        }
+      }
+
+      token.type = C_TOKEN_LITERAL_STRING;
+      token.raw  = string_substring(lexer.source, lexer.at, end);
+    }
+    else if (curr_char == '\'') // Character literal
+    {
+      usize end = lexer.at + 1;
+
+      usize escape_count = 0;
+      while (c_lexer_in_bounds(lexer, end))
+      {
+        u8 c = lexer.source.v[end];
+        if (c == '\'' && escape_count % 2 == 0)
+        {
+          end += 1;
+          break;
+        }
+        else if (c == '\\')
+        {
+          end += 1;
+          escape_count += 1;
+        }
+        else
+        {
+          end += 1;
+          escape_count = 0; // We encountered something else, reset escape count
+        }
+      }
+
+      token.type = C_TOKEN_LITERAL_CHAR;
+      token.raw  = string_substring(lexer.source, lexer.at, end);
+    }
+
+    // TODO: Simplify?
+    else if (char_is_digit(curr_char)) // Number literal
+    {
+      // By default
+      token.type = C_TOKEN_LITERAL_INT;
+      token.int_literal.base = 10;
+
+      usize end = lexer.at + 1;
+      while (c_lexer_in_bounds(lexer, end))
+      {
+        u8 c = lexer.source.v[end];
+        if (c == 'x' || c == 'X')
+        {
+          if (end - lexer.at == 1) // Should be second character
           {
+            token.int_literal.base = 16;
+
             end += 1;
           }
           else
           {
+            token.type = C_TOKEN_NONE;
             break;
           }
         }
-
-        token.raw  = string_substring(lexer.source, lexer.at, end);
-
-        // Check for keyword match, probably too few keywords to see benefit from hashing
-        for (usize keyword_idx = 0; keyword_idx < STATIC_COUNT(c_keywords); keyword_idx += 1)
+        else if (c == 'b' || c == 'B')
         {
-          C_Keyword_Info keyword = c_keywords[keyword_idx];
-
-          if (string_match(keyword.string, token.raw))
+          if (end - lexer.at == 1) // Should be second character
           {
-            token.type = c_keywords[keyword_idx].type;
-          }
-        }
+            token.int_literal.base = 2;
 
-        // Not a keyword, must be an identifier
-        if (token.type == C_TOKEN_NONE)
-        {
-          token.type = C_TOKEN_IDENTIFIER;
-        }
-      }
-      else if (curr_char == '"') // String literal
-      {
-        usize end = lexer.at + 1;
-
-        usize escape_count = 0;
-        while (c_lexer_in_bounds(lexer, end))
-        {
-          u8 c = lexer.source.v[end];
-          if (c == '"' && escape_count % 2 == 0)
-          {
             end += 1;
-            break;
-          }
-          else if (c == '\\')
-          {
-            end += 1;
-            escape_count += 1;
           }
           else
           {
-            end += 1;
-            escape_count = 0; // We encountered something else, reset escape count
-          }
-        }
-
-        token.type = C_TOKEN_LITERAL_STRING;
-        token.raw  = string_substring(lexer.source, lexer.at, end);
-      }
-      else if (curr_char == '\'') // Character literal
-      {
-        usize end = lexer.at + 1;
-
-        usize escape_count = 0;
-        while (c_lexer_in_bounds(lexer, end))
-        {
-          u8 c = lexer.source.v[end];
-          if (c == '\'' && escape_count % 2 == 0)
-          {
-            end += 1;
+            // TODO: This would be an error
+            token.type = C_TOKEN_NONE;
             break;
           }
-          else if (c == '\\')
-          {
-            end += 1;
-            escape_count += 1;
-          }
-          else
-          {
-            end += 1;
-            escape_count = 0; // We encountered something else, reset escape count
-          }
         }
-
-        token.type = C_TOKEN_LITERAL_CHAR;
-        token.raw  = string_substring(lexer.source, lexer.at, end);
-      }
-
-      // TODO: Simplify?
-      else if (char_is_digit(curr_char)) // Number literal
-      {
-        token.type = C_TOKEN_LITERAL_INT; // By default
-
-        usize end = lexer.at + 1;
-        while (c_lexer_in_bounds(lexer, end))
+        else if (char_is_digit(c))
         {
-          u8 c = lexer.source.v[end];
-          if (c == 'x' || c == 'X')
-          {
-            end += 1;
-            // TODO: Base
-          }
-          else if (c == 'b' || c == 'B')
-          {
-            end += 1;
-            // TODO: Base
-          }
-          else if (char_is_digit(c))
-          {
-            end += 1;
-          }
-          else if (c == '.' || c == 'E' || c == 'e')
-          {
-            token.type = C_TOKEN_LITERAL_DOUBLE;
-            end += 1;
-          }
-          else if (c == 'f' || c == 'F') // float, marks end, so break
-          {
-            token.type = C_TOKEN_LITERAL_FLOAT;
-            end += 1;
-            break;
-          }
-          else if (c == 'u' || c == 'U') // unsigned, unsigned long, or unsigned long long, marks the end, so break after
-          {
-            token.type = C_TOKEN_LITERAL_UNSIGNED_INT;
-            end += 1;
+          end += 1;
+        }
+        else if (c == '.' || c == 'E' || c == 'e')
+        {
+          token.type = C_TOKEN_LITERAL_DOUBLE;
+          end += 1;
+        }
+        else if (c == 'f' || c == 'F') // float, marks end, so break
+        {
+          token.type = C_TOKEN_LITERAL_FLOAT;
+          end += 1;
+          break;
+        }
+        else if (c == 'u' || c == 'U') // unsigned, unsigned long, or unsigned long long, marks the end, so break after
+        {
+          token.type = C_TOKEN_LITERAL_UNSIGNED_INT;
+          end += 1;
 
-            if (c_lexer_in_bounds(lexer, end))
+          if (c_lexer_in_bounds(lexer, end))
+          {
+            c = lexer.source.v[end];
+            if (c == 'l' || c == 'L')
             {
-              c = lexer.source.v[end];
-              if (c == 'l' || c == 'L')
-              {
-                token.type = C_TOKEN_LITERAL_UNSIGNED_LONG;
-                end += 1;
+              token.type = C_TOKEN_LITERAL_UNSIGNED_LONG;
+              end += 1;
 
-                if (c_lexer_in_bounds(lexer, end))
+              if (c_lexer_in_bounds(lexer, end))
+              {
+                c = lexer.source.v[end];
+                if (c == 'L')
                 {
-                  c = lexer.source.v[end];
-                  if (c == 'L')
-                  {
-                    end += 1;
-                    token.type = C_TOKEN_LITERAL_UNSIGNED_LONG_LONG;
-                  }
+                  end += 1;
+                  token.type = C_TOKEN_LITERAL_UNSIGNED_LONG_LONG;
                 }
               }
             }
-
-            break;
           }
-          else if (c == 'l' || c == 'L') // long or long long, marks the end, so break after
-          {
-            token.type = C_TOKEN_LITERAL_LONG;
-            end += 1;
 
-            if (c_lexer_in_bounds(lexer, end))
-            {
-              c = lexer.source.v[end];
-              if (c == 'l' || c == 'L')
-              {
-                token.type = C_TOKEN_LITERAL_LONG_LONG;
-                end += 1;
-              }
-            }
-
-            break;
-          }
-          else
-          {
-            break;
-          }
+          break;
         }
+        else if (c == 'l' || c == 'L') // long or long long, marks the end, so break after
+        {
+          token.type = C_TOKEN_LITERAL_LONG;
+          end += 1;
 
-        token.raw = string_substring(lexer.source, lexer.at, end);
+          if (c_lexer_in_bounds(lexer, end))
+          {
+            c = lexer.source.v[end];
+            if (c == 'l' || c == 'L')
+            {
+              token.type = C_TOKEN_LITERAL_LONG_LONG;
+              end += 1;
+            }
+          }
+
+          break;
+        }
+        else
+        {
+          break;
+        }
       }
+
+      token.raw = string_substring(lexer.source, lexer.at, end);
     }
+
 
     usize advance = 1; // We'll just skip ahead if we haven't gotten a real token... maybe not best plan?
     if (token.type != C_TOKEN_NONE)
@@ -547,7 +584,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     }
     else
     {
-      LOG_ERROR("Unkown token encountered at line: %lu, column: %lu", lexer.lines_processed + 1, lexer.columns_processed + 1);
+      LOG_ERROR("Unkown token encountered at line: %lu, column: %lu", token.line, token.column);
     }
 
     c_lexer_advance(&lexer, advance);

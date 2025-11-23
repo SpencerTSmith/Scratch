@@ -508,5 +508,22 @@ int main(int argc, char **argv)
     arena_clear(&arena);
   }
 
+  {
+    const char *label = "Different base integer literals";
+
+    C_Token_Array tokens = tokenize_c_code(&arena, STR("0x42 0x12L 0b01u 10LL"));
+    PRINT_EVAL(label, tokens.count == 4);
+    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_LITERAL_INT);
+    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_LITERAL_LONG);
+    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_LITERAL_UNSIGNED_INT);
+    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_LITERAL_LONG_LONG);
+    PRINT_EVAL(label, tokens.v[1].int_literal.base == 16);
+    PRINT_EVAL(label, tokens.v[0].int_literal.base == 16);
+    PRINT_EVAL(label, tokens.v[2].int_literal.base == 2);
+    PRINT_EVAL(label, tokens.v[3].int_literal.base == 10);
+
+    arena_clear(&arena);
+  }
+
   arena_free(&arena);
 }

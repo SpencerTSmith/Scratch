@@ -1,6 +1,9 @@
 #define COMMON_IMPLEMENTATION
 #include "../common.h"
 
+#include "testing.h"
+#include "testing.c"
+
 #include "../c_tokenize.c"
 
 int main(int argc, char **argv)
@@ -79,442 +82,420 @@ int main(int argc, char **argv)
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Single character tokens"))
   {
-    const char *label = "Single character tokens";
 
     C_Token_Array tokens = tokenize_c_code(&arena, STR("(){}[]"));
-    PRINT_EVAL(label, tokens.count == 6);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_BEGIN_PARENTHESIS);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_CLOSE_PARENTHESIS);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_BEGIN_CURLY_BRACE);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_CLOSE_CURLY_BRACE);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_BEGIN_SQUARE_BRACE);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_CLOSE_SQUARE_BRACE);
+    TEST_EVAL(tokens.count == 6);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_BEGIN_PARENTHESIS);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_CLOSE_PARENTHESIS);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_BEGIN_CURLY_BRACE);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_CLOSE_CURLY_BRACE);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_BEGIN_SQUARE_BRACE);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_CLOSE_SQUARE_BRACE);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Single operators"))
   {
-    const char *label = "Single operators";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("+ - * / % = , ; ."));
-    PRINT_EVAL(label, tokens.count == 9);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_ADD);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_MINUS);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_STAR);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_DIVIDE);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_MODULO);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_ASSIGN);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_COMMA);
-    PRINT_EVAL(label, tokens.v[7].type == C_TOKEN_SEMICOLON);
-    PRINT_EVAL(label, tokens.v[8].type == C_TOKEN_DOT);
+    TEST_EVAL(tokens.count == 9);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_ADD);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_MINUS);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_STAR);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_DIVIDE);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_MODULO);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_ASSIGN);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_COMMA);
+    TEST_EVAL(tokens.v[7].type == C_TOKEN_SEMICOLON);
+    TEST_EVAL(tokens.v[8].type == C_TOKEN_DOT);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Double operators"))
   {
-    const char *label = "Double operators";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("++ -- == != <= >= && || ->"));
-    PRINT_EVAL(label, tokens.count == 9);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_INCREMENT);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_DECREMENT);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_COMPARE_EQUAL);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_COMPARE_NOT_EQUAL);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_LESS_THAN_EQUAL);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_GREATER_THAN_EQUAL);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_LOGICAL_AND);
-    PRINT_EVAL(label, tokens.v[7].type == C_TOKEN_LOGICAL_OR);
-    PRINT_EVAL(label, tokens.v[8].type == C_TOKEN_ARROW);
+    TEST_EVAL(tokens.count == 9);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_INCREMENT);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_DECREMENT);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_COMPARE_EQUAL);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_COMPARE_NOT_EQUAL);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_LESS_THAN_EQUAL);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_GREATER_THAN_EQUAL);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_LOGICAL_AND);
+    TEST_EVAL(tokens.v[7].type == C_TOKEN_LOGICAL_OR);
+    TEST_EVAL(tokens.v[8].type == C_TOKEN_ARROW);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Assignment operators"))
   {
-    const char *label = "Assignment operators";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("+= -= *= /= %= &= |= ^="));
-    PRINT_EVAL(label, tokens.count == 8);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_ADD_ASSIGN);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_SUBTRACT_ASSIGN);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_MULTIPLY_ASSIGN);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_DIVIDE_ASSIGN);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_MODULO_ASSIGN);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_AND_ASSIGN);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_OR_ASSIGN);
-    PRINT_EVAL(label, tokens.v[7].type == C_TOKEN_XOR_ASSIGN);
+    TEST_EVAL(tokens.count == 8);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_ADD_ASSIGN);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_SUBTRACT_ASSIGN);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_MULTIPLY_ASSIGN);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_DIVIDE_ASSIGN);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_MODULO_ASSIGN);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_AND_ASSIGN);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_OR_ASSIGN);
+    TEST_EVAL(tokens.v[7].type == C_TOKEN_XOR_ASSIGN);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Bitwise operators"))
   {
-    const char *label = "Bitwise operators";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("& | ^ ~ < >"));
-    PRINT_EVAL(label, tokens.count == 6);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_BITWISE_AND);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_BITWISE_OR);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_XOR);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_BITWISE_NOT);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_LESS_THAN);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_GREATER_THAN);
+    TEST_EVAL(tokens.count == 6);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_BITWISE_AND);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_BITWISE_OR);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_XOR);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_BITWISE_NOT);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_LESS_THAN);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_GREATER_THAN);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Bitwise operators"))
   {
-    const char *label = "Bitwise operators";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("& | ^ ~ < >"));
-    PRINT_EVAL(label, tokens.count == 6);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_BITWISE_AND);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_BITWISE_OR);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_XOR);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_BITWISE_NOT);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_LESS_THAN);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_GREATER_THAN);
+    TEST_EVAL(tokens.count == 6);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_BITWISE_AND);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_BITWISE_OR);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_XOR);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_BITWISE_NOT);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_LESS_THAN);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_GREATER_THAN);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Control flow keywords"))
   {
-    const char *label = "Control flow keywords";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("if else for while do switch case default break continue return goto"));
-    PRINT_EVAL(label, tokens.count == 12);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_KEYWORD_IF);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_KEYWORD_ELSE);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_KEYWORD_FOR);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_KEYWORD_WHILE);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_KEYWORD_DO);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_KEYWORD_SWITCH);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_KEYWORD_CASE);
-    PRINT_EVAL(label, tokens.v[7].type == C_TOKEN_KEYWORD_DEFAULT);
-    PRINT_EVAL(label, tokens.v[8].type == C_TOKEN_KEYWORD_BREAK);
-    PRINT_EVAL(label, tokens.v[9].type == C_TOKEN_KEYWORD_CONTINUE);
-    PRINT_EVAL(label, tokens.v[10].type == C_TOKEN_KEYWORD_RETURN);
-    PRINT_EVAL(label, tokens.v[11].type == C_TOKEN_KEYWORD_GOTO);
+    TEST_EVAL(tokens.count == 12);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_KEYWORD_IF);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_KEYWORD_ELSE);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_KEYWORD_FOR);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_KEYWORD_WHILE);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_KEYWORD_DO);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_KEYWORD_SWITCH);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_KEYWORD_CASE);
+    TEST_EVAL(tokens.v[7].type == C_TOKEN_KEYWORD_DEFAULT);
+    TEST_EVAL(tokens.v[8].type == C_TOKEN_KEYWORD_BREAK);
+    TEST_EVAL(tokens.v[9].type == C_TOKEN_KEYWORD_CONTINUE);
+    TEST_EVAL(tokens.v[10].type == C_TOKEN_KEYWORD_RETURN);
+    TEST_EVAL(tokens.v[11].type == C_TOKEN_KEYWORD_GOTO);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Type keywords"))
   {
-    const char *label = "Type keywords";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("void char short int long float double unsigned signed"));
-    PRINT_EVAL(label, tokens.count == 9);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_KEYWORD_VOID);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_KEYWORD_CHAR);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_KEYWORD_SHORT);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_KEYWORD_INT);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_KEYWORD_LONG);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_KEYWORD_FLOAT);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_KEYWORD_DOUBLE);
-    PRINT_EVAL(label, tokens.v[7].type == C_TOKEN_KEYWORD_UNSIGNED);
-    PRINT_EVAL(label, tokens.v[8].type == C_TOKEN_KEYWORD_SIGNED);
+    TEST_EVAL(tokens.count == 9);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_KEYWORD_VOID);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_KEYWORD_CHAR);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_KEYWORD_SHORT);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_KEYWORD_INT);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_KEYWORD_LONG);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_KEYWORD_FLOAT);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_KEYWORD_DOUBLE);
+    TEST_EVAL(tokens.v[7].type == C_TOKEN_KEYWORD_UNSIGNED);
+    TEST_EVAL(tokens.v[8].type == C_TOKEN_KEYWORD_SIGNED);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Declaration keywords"))
   {
-    const char *label = "Declaration keywords";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("struct enum union typedef const static extern inline register restrict sizeof"));
-    PRINT_EVAL(label, tokens.count == 11);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_KEYWORD_STRUCT);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_KEYWORD_ENUM);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_KEYWORD_UNION);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_KEYWORD_TYPEDEF);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_KEYWORD_CONST);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_KEYWORD_STATIC);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_KEYWORD_EXTERN);
-    PRINT_EVAL(label, tokens.v[7].type == C_TOKEN_KEYWORD_INLINE);
-    PRINT_EVAL(label, tokens.v[8].type == C_TOKEN_KEYWORD_REGISTER);
-    PRINT_EVAL(label, tokens.v[9].type == C_TOKEN_KEYWORD_RESTRICT);
-    PRINT_EVAL(label, tokens.v[10].type == C_TOKEN_KEYWORD_SIZEOF);
+    TEST_EVAL(tokens.count == 11);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_KEYWORD_STRUCT);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_KEYWORD_ENUM);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_KEYWORD_UNION);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_KEYWORD_TYPEDEF);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_KEYWORD_CONST);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_KEYWORD_STATIC);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_KEYWORD_EXTERN);
+    TEST_EVAL(tokens.v[7].type == C_TOKEN_KEYWORD_INLINE);
+    TEST_EVAL(tokens.v[8].type == C_TOKEN_KEYWORD_REGISTER);
+    TEST_EVAL(tokens.v[9].type == C_TOKEN_KEYWORD_RESTRICT);
+    TEST_EVAL(tokens.v[10].type == C_TOKEN_KEYWORD_SIZEOF);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Identifiers"))
   {
-    const char *label = "Identifiers";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("foo bar _test var123 _123 intensity floating"));
-    PRINT_EVAL(label, tokens.count == 7);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, string_match(tokens.v[0].raw, STR("foo")));
-    PRINT_EVAL(label, string_match(tokens.v[1].raw, STR("bar")));
-    PRINT_EVAL(label, string_match(tokens.v[2].raw, STR("_test")));
-    PRINT_EVAL(label, string_match(tokens.v[3].raw, STR("var123")));
-    PRINT_EVAL(label, string_match(tokens.v[4].raw, STR("_123")));
-    PRINT_EVAL(label, string_match(tokens.v[5].raw, STR("intensity")));
-    PRINT_EVAL(label, string_match(tokens.v[6].raw, STR("floating")));
+    TEST_EVAL(tokens.count == 7);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(string_match(tokens.v[0].raw, STR("foo")));
+    TEST_EVAL(string_match(tokens.v[1].raw, STR("bar")));
+    TEST_EVAL(string_match(tokens.v[2].raw, STR("_test")));
+    TEST_EVAL(string_match(tokens.v[3].raw, STR("var123")));
+    TEST_EVAL(string_match(tokens.v[4].raw, STR("_123")));
+    TEST_EVAL(string_match(tokens.v[5].raw, STR("intensity")));
+    TEST_EVAL(string_match(tokens.v[6].raw, STR("floating")));
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Integer literals"))
   {
-    const char *label = "Integer literals";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("42 123u 456L 789LL 999uL 111uLL"));
-    PRINT_EVAL(label, tokens.count == 6);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_LITERAL_INT);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_LITERAL_UNSIGNED_INT);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_LITERAL_LONG);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_LITERAL_LONG_LONG);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_LITERAL_UNSIGNED_LONG);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_LITERAL_UNSIGNED_LONG_LONG);
-    PRINT_EVAL(label, string_match(tokens.v[0].raw, STR("42")));
-    PRINT_EVAL(label, string_match(tokens.v[1].raw, STR("123u")));
-    PRINT_EVAL(label, string_match(tokens.v[2].raw, STR("456L")));
-    PRINT_EVAL(label, string_match(tokens.v[3].raw, STR("789LL")));
-    PRINT_EVAL(label, string_match(tokens.v[4].raw, STR("999uL")));
-    PRINT_EVAL(label, string_match(tokens.v[5].raw, STR("111uLL")));
-    PRINT_EVAL(label, tokens.v[0].int_literal.v == 42);
-    PRINT_EVAL(label, tokens.v[1].int_literal.v == 123);
-    PRINT_EVAL(label, tokens.v[2].int_literal.v == 456);
-    PRINT_EVAL(label, tokens.v[3].int_literal.v == 789);
-    PRINT_EVAL(label, tokens.v[4].int_literal.v == 999);
-    PRINT_EVAL(label, tokens.v[5].int_literal.v == 111);
+    TEST_EVAL(tokens.count == 6);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_UNSIGNED_INT);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_LONG);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_LITERAL_LONG_LONG);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_LITERAL_UNSIGNED_LONG);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_LITERAL_UNSIGNED_LONG_LONG);
+    TEST_EVAL(string_match(tokens.v[0].raw, STR("42")));
+    TEST_EVAL(string_match(tokens.v[1].raw, STR("123u")));
+    TEST_EVAL(string_match(tokens.v[2].raw, STR("456L")));
+    TEST_EVAL(string_match(tokens.v[3].raw, STR("789LL")));
+    TEST_EVAL(string_match(tokens.v[4].raw, STR("999uL")));
+    TEST_EVAL(string_match(tokens.v[5].raw, STR("111uLL")));
+    TEST_EVAL(tokens.v[0].int_literal.v == 42);
+    TEST_EVAL(tokens.v[1].int_literal.v == 123);
+    TEST_EVAL(tokens.v[2].int_literal.v == 456);
+    TEST_EVAL(tokens.v[3].int_literal.v == 789);
+    TEST_EVAL(tokens.v[4].int_literal.v == 999);
+    TEST_EVAL(tokens.v[5].int_literal.v == 111);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Float literals"))
   {
-    const char *label = "Float literals";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("3.14 2.5f 1.0e10 6.022E23"));
-    PRINT_EVAL(label, tokens.count == 4);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_LITERAL_DOUBLE);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_LITERAL_FLOAT);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_LITERAL_DOUBLE);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_LITERAL_DOUBLE);
-    PRINT_EVAL(label, string_match(tokens.v[0].raw, STR("3.14")));
-    PRINT_EVAL(label, string_match(tokens.v[1].raw, STR("2.5f")));
-    PRINT_EVAL(label, string_match(tokens.v[2].raw, STR("1.0e10")));
-    PRINT_EVAL(label, string_match(tokens.v[3].raw, STR("6.022E23")));
-    PRINT_EVAL(label, tokens.v[0].float_literal == 3.14);
-    PRINT_EVAL(label, tokens.v[1].float_literal == 2.5);
+    TEST_EVAL(tokens.count == 4);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_DOUBLE);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_FLOAT);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_DOUBLE);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_LITERAL_DOUBLE);
+    TEST_EVAL(string_match(tokens.v[0].raw, STR("3.14")));
+    TEST_EVAL(string_match(tokens.v[1].raw, STR("2.5f")));
+    TEST_EVAL(string_match(tokens.v[2].raw, STR("1.0e10")));
+    TEST_EVAL(string_match(tokens.v[3].raw, STR("6.022E23")));
+    TEST_EVAL(tokens.v[0].float_literal == 3.14);
+    TEST_EVAL(tokens.v[1].float_literal == 2.5);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("String literals"))
   {
-    const char *label = "String literals";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("\"hello\" \"world\" \"test\\nstring\""));
-    PRINT_EVAL(label, tokens.count == 3);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_LITERAL_STRING);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_LITERAL_STRING);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_LITERAL_STRING);
-    PRINT_EVAL(label, string_match(tokens.v[0].raw, STR("\"hello\"")));
-    PRINT_EVAL(label, string_match(tokens.v[1].raw, STR("\"world\"")));
-    PRINT_EVAL(label, string_match(tokens.v[2].raw, STR("\"test\\nstring\"")));
+    TEST_EVAL(tokens.count == 3);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_STRING);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_STRING);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_STRING);
+    TEST_EVAL(string_match(tokens.v[0].raw, STR("\"hello\"")));
+    TEST_EVAL(string_match(tokens.v[1].raw, STR("\"world\"")));
+    TEST_EVAL(string_match(tokens.v[2].raw, STR("\"test\\nstring\"")));
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Character literals"))
   {
-    const char *label = "Character literals";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("'a' 'b' '\\n' '\\t'"));
-    PRINT_EVAL(label, tokens.count == 4);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_LITERAL_CHAR);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_LITERAL_CHAR);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_LITERAL_CHAR);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_LITERAL_CHAR);
-    PRINT_EVAL(label, string_match(tokens.v[0].raw, STR("'a'")));
-    PRINT_EVAL(label, string_match(tokens.v[1].raw, STR("'b'")));
-    PRINT_EVAL(label, string_match(tokens.v[2].raw, STR("'\\n'")));
-    PRINT_EVAL(label, string_match(tokens.v[3].raw, STR("'\\t'")));
+    TEST_EVAL(tokens.count == 4);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_CHAR);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_CHAR);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_CHAR);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_LITERAL_CHAR);
+    TEST_EVAL(string_match(tokens.v[0].raw, STR("'a'")));
+    TEST_EVAL(string_match(tokens.v[1].raw, STR("'b'")));
+    TEST_EVAL(string_match(tokens.v[2].raw, STR("'\\n'")));
+    TEST_EVAL(string_match(tokens.v[3].raw, STR("'\\t'")));
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Single-line comments"))
   {
-    const char *label = "Single-line comments";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("foo // this is a comment\nbar"));
-    PRINT_EVAL(label, tokens.count == 2);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, string_match(tokens.v[0].raw, STR("foo")));
-    PRINT_EVAL(label, string_match(tokens.v[1].raw, STR("bar")));
+    TEST_EVAL(tokens.count == 2);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(string_match(tokens.v[0].raw, STR("foo")));
+    TEST_EVAL(string_match(tokens.v[1].raw, STR("bar")));
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Multi-line comments"))
   {
-    const char *label = "Multi-line comments";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("foo /* this is a\nmulti-line comment */ bar"));
-    PRINT_EVAL(label, tokens.count == 2);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, string_match(tokens.v[0].raw, STR("foo")));
-    PRINT_EVAL(label, string_match(tokens.v[1].raw, STR("bar")));
+    TEST_EVAL(tokens.count == 2);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(string_match(tokens.v[0].raw, STR("foo")));
+    TEST_EVAL(string_match(tokens.v[1].raw, STR("bar")));
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Simple expression"))
   {
-    const char *label = "Simple expression";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("x = y + 5;"));
-    PRINT_EVAL(label, tokens.count == 6);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_ASSIGN);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_ADD);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_LITERAL_INT);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_SEMICOLON);
+    TEST_EVAL(tokens.count == 6);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_ASSIGN);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_ADD);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_SEMICOLON);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Simple expression"))
   {
-    const char *label = "Simple expression";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("x = y + 5;"));
-    PRINT_EVAL(label, tokens.count == 6);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_ASSIGN);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_ADD);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_LITERAL_INT);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_SEMICOLON);
+    TEST_EVAL(tokens.count == 6);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_ASSIGN);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_ADD);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_SEMICOLON);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Function declaration"))
   {
-    const char *label = "Function declaration";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("int foo(int x, int y)"));
-    PRINT_EVAL(label, tokens.count == 9);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_KEYWORD_INT);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_BEGIN_PARENTHESIS);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_KEYWORD_INT);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_COMMA);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_KEYWORD_INT);
-    PRINT_EVAL(label, tokens.v[7].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[8].type == C_TOKEN_CLOSE_PARENTHESIS);
+    TEST_EVAL(tokens.count == 9);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_KEYWORD_INT);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_BEGIN_PARENTHESIS);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_KEYWORD_INT);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_COMMA);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_KEYWORD_INT);
+    TEST_EVAL(tokens.v[7].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[8].type == C_TOKEN_CLOSE_PARENTHESIS);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Struct member access"))
   {
-    const char *label = "Struct member access";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("foo.bar ptr->baz"));
-    PRINT_EVAL(label, tokens.count == 6);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_DOT);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_ARROW);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.count == 6);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_DOT);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_ARROW);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_IDENTIFIER);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Pointer operations"))
   {
-    const char *label = "Pointer operations";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("*ptr &value **double_ptr"));
-    PRINT_EVAL(label, tokens.count == 7);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_STAR);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_BITWISE_AND);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_STAR);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_STAR);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.count == 7);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_STAR);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_BITWISE_AND);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_STAR);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_STAR);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_IDENTIFIER);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Array indexing"))
   {
-    const char *label = "Array indexing";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("array[0] matrix[i][j]"));
-    PRINT_EVAL(label, tokens.count == 11);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_BEGIN_SQUARE_BRACE);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_LITERAL_INT);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_CLOSE_SQUARE_BRACE);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_BEGIN_SQUARE_BRACE);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[7].type == C_TOKEN_CLOSE_SQUARE_BRACE);
-    PRINT_EVAL(label, tokens.v[8].type == C_TOKEN_BEGIN_SQUARE_BRACE);
-    PRINT_EVAL(label, tokens.v[9].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[10].type == C_TOKEN_CLOSE_SQUARE_BRACE);
+    TEST_EVAL(tokens.count == 11);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_BEGIN_SQUARE_BRACE);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_CLOSE_SQUARE_BRACE);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_BEGIN_SQUARE_BRACE);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[7].type == C_TOKEN_CLOSE_SQUARE_BRACE);
+    TEST_EVAL(tokens.v[8].type == C_TOKEN_BEGIN_SQUARE_BRACE);
+    TEST_EVAL(tokens.v[9].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[10].type == C_TOKEN_CLOSE_SQUARE_BRACE);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Whitespace handling"))
   {
-    const char *label = "Whitespace handling";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("  \n\t  foo   \n  bar  \t\n"));
-    PRINT_EVAL(label, tokens.count == 2);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, string_match(tokens.v[0].raw, STR("foo")));
-    PRINT_EVAL(label, string_match(tokens.v[1].raw, STR("bar")));
+    TEST_EVAL(tokens.count == 2);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(string_match(tokens.v[0].raw, STR("foo")));
+    TEST_EVAL(string_match(tokens.v[1].raw, STR("bar")));
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Ternary expression"))
   {
-    const char *label = "Ternary expression";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("x = x > y ? x : y;"));
-    PRINT_EVAL(label, tokens.count == 10);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_ASSIGN);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_GREATER_THAN);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[5].type == C_TOKEN_QUESTION);
-    PRINT_EVAL(label, tokens.v[6].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[7].type == C_TOKEN_COLON);
-    PRINT_EVAL(label, tokens.v[8].type == C_TOKEN_IDENTIFIER);
-    PRINT_EVAL(label, tokens.v[9].type == C_TOKEN_SEMICOLON);
+    TEST_EVAL(tokens.count == 10);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_ASSIGN);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_GREATER_THAN);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_QUESTION);
+    TEST_EVAL(tokens.v[6].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[7].type == C_TOKEN_COLON);
+    TEST_EVAL(tokens.v[8].type == C_TOKEN_IDENTIFIER);
+    TEST_EVAL(tokens.v[9].type == C_TOKEN_SEMICOLON);
 
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Different base integer literals"))
   {
-    const char *label = "Different base integer literals";
-
     C_Token_Array tokens = tokenize_c_code(&arena, STR("0x42 0x12L 0b11u 0b10 0xFA"));
-    PRINT_EVAL(label, tokens.count == 5);
-    PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_LITERAL_INT);
-    PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_LITERAL_LONG);
-    PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_LITERAL_UNSIGNED_INT);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_LITERAL_INT);
-    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_LITERAL_INT);
-    PRINT_EVAL(label, tokens.v[0].int_literal.base == 16);
-    PRINT_EVAL(label, tokens.v[1].int_literal.base == 16);
-    PRINT_EVAL(label, tokens.v[2].int_literal.base == 2);
-    PRINT_EVAL(label, tokens.v[3].int_literal.base == 2);
-    PRINT_EVAL(label, tokens.v[4].int_literal.base == 16);
-    PRINT_EVAL(label, tokens.v[0].int_literal.v == 66);
-    PRINT_EVAL(label, tokens.v[1].int_literal.v == 18);
-    PRINT_EVAL(label, tokens.v[2].int_literal.v == 3);
-    PRINT_EVAL(label, tokens.v[3].int_literal.v == 2);
-    PRINT_EVAL(label, tokens.v[4].int_literal.v == 250);
+    TEST_EVAL(tokens.count == 5);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_LONG);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_UNSIGNED_INT);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[0].int_literal.base == 16);
+    TEST_EVAL(tokens.v[1].int_literal.base == 16);
+    TEST_EVAL(tokens.v[2].int_literal.base == 2);
+    TEST_EVAL(tokens.v[3].int_literal.base == 2);
+    TEST_EVAL(tokens.v[4].int_literal.base == 16);
+    TEST_EVAL(tokens.v[0].int_literal.v == 66);
+    TEST_EVAL(tokens.v[1].int_literal.v == 18);
+    TEST_EVAL(tokens.v[2].int_literal.v == 3);
+    TEST_EVAL(tokens.v[3].int_literal.v == 2);
+    TEST_EVAL(tokens.v[4].int_literal.v == 250);
 
     arena_clear(&arena);
   }
+
+  tester_summarize();
 
   arena_free(&arena);
 }

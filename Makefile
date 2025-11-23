@@ -31,7 +31,7 @@ address-anatomy: bin-folder
 	gcc ${CFLAGS} src/address_anatomy.c -o bin/address_anatomy.x
 	bin/address_anatomy.x
 
-tests: test-common test-arguments test-c-tokenize
+tests: test-common test-arguments test-c-tokenize test-linear-algebra
 
 test-common: bin-folder
 	gcc ${TEST_FLAGS} src/tests/test_common.c -o bin/test_common.x

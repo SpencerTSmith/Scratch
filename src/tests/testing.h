@@ -1,37 +1,61 @@
+#ifndef TESTING_H
+#define TESTING_H
 #include "../common.h"
 
-// NOTE: Probably not a good idea to nest blocks
+// NOTE: Not a good idea to nest blocks
 
 typedef struct Tester_Block Tester_Block;
 struct Tester_Block
 {
   String label;
-  u64    pass_count;
-  u64    fail_count;
-  u64    total_count;
+  usize  pass_count;
+  usize  fail_count;
+  usize  total_count;
 };
 
 typedef struct Tester Tester;
 struct Tester
 {
   Tester_Block blocks[4096];
-  usize current_block;
-  u64   total_pass_count;
-  u64   total_fail_count;
-  u64   total_count;
+  usize block_count;
+  usize total_pass_count;
+  usize total_fail_count;
+  usize total_count;
 };
 
-static Tester g_tester = {0};
+static
+Tester g_tester = {0};
 
 static
-Tester_Block __test_begin_block(String label, usize index);
+void tester_summarize();
 
 static
-void __test_close_block(Tester_Block block);
+Tester_Block *__test_begin_block(String label);
 
-// HACK: Don't use with profiler! Both use __COUNTER__ !
-#define test_begin_block(label) __test_begin_block((label), __COUNTER__ + 1)
-#define test_close_block(block) __test_close_block((block))
+static
+void __test_close_block(Tester_Block *block);
 
 #define TEST_BLOCK(label) \
-  for (Tester_Block block = test_begin_block((label)); block.total_count == 0; test_close_block(block))
+  for (Tester_Block *_test_block_ = __test_begin_block((label)); _test_block_->total_count == 0; __test_close_block(_test_block_))
+
+#define TEST_EVAL(expr)                                                                                       \
+  STATEMENT                                                                                                   \
+  (                                                                                                           \
+    b32 __expr_eval = (expr);                                                                                 \
+    const char *message = ANSI_GREEN "PASS :)" ANSI_RESET;                                                    \
+    if (__expr_eval)                                                                                          \
+    {                                                                                                         \
+      _test_block_->pass_count += 1;                                                                          \
+    }                                                                                                         \
+    else                                                                                                      \
+    {                                                                                                         \
+      _test_block_->fail_count += 1;                                                                          \
+      message =  ANSI_RED "FAIL :( @" __FILE__":" STRINGIFY(__LINE__) ANSI_RESET;                             \
+    }                                                                                                         \
+    _test_block_->total_count += 1;                                                                           \
+                                                                                                              \
+    printf("  [%s]: %s\n", #expr, message);                                                                   \
+                                                                                                              \
+  )
+
+#endif // TESTING_H

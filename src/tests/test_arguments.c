@@ -1,6 +1,9 @@
 #define COMMON_IMPLEMENTATION
 #include "../common.h"
 
+#include "testing.h"
+#include "testing.c"
+
 int main(int argc, char **argv)
 {
   Arena arena = arena_make();
@@ -34,33 +37,36 @@ int main(int argc, char **argv)
   //   }
   // }
 
-  // Test and such
+  TEST_BLOCK(STR("args_has_flag"))
   {
-    const char *label = "args_has_flag";
-    PRINT_EVAL(label, args_has_flag(&arguments, String("foo")));
+    TEST_EVAL(args_has_flag(&arguments, String("foo")));
   }
 
+  TEST_BLOCK(STR("args_get_option_values"))
   {
-    const char *label = "args_get_option_values";
     String_Array values = args_get_option_values(&arguments, String("baz"));
-    PRINT_EVAL(label, string_match(values.v[0], String("foo")));
-    PRINT_EVAL(label, string_match(values.v[1], String("bar")));
-    PRINT_EVAL(label, string_match(values.v[2], String("boo")));
+    TEST_EVAL(string_match(values.v[0], String("foo")));
+    TEST_EVAL(string_match(values.v[1], String("bar")));
+    TEST_EVAL(string_match(values.v[2], String("boo")));
   }
 
+  TEST_BLOCK(STR("args_get_option_values"))
   {
-    const char *label = "args_get_option_values";
     String_Array values = args_get_option_values(&arguments, String("bunk"));
-    PRINT_EVAL(label, string_match(values.v[0], String("bip")));
-    PRINT_EVAL(label, string_match(values.v[1], String("bop")));
-    PRINT_EVAL(label, string_match(values.v[2], String("bam")));
+    TEST_EVAL(string_match(values.v[0], String("bip")));
+    TEST_EVAL(string_match(values.v[1], String("bop")));
+    TEST_EVAL(string_match(values.v[2], String("bam")));
   }
 
+  TEST_BLOCK(STR("args_positionals"))
   {
-    const char *label = "args_positionals";
     String *positionals = arguments.positionals;
-    PRINT_EVAL(label, arguments.positionals_count == 2);
-    PRINT_EVAL(label, string_match(positionals[0], String("positional")));
-    PRINT_EVAL(label, string_match(positionals[1], String("positional2")));
+    TEST_EVAL(arguments.positionals_count == 2);
+    TEST_EVAL(string_match(positionals[0], String("positional")));
+    TEST_EVAL(string_match(positionals[1], String("positional2")));
   }
+
+  tester_summarize();
+
+  arena_free(&arena);
 }

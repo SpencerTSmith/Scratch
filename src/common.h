@@ -396,6 +396,7 @@ void arena_clear(Arena *arena);
 
 // More generic helpers: first, last, new are all pointers, while next is the name of
 // the next link member variable
+//
 // NOTE: These are expressions and therefore they will evaluate to a pointer to the node
 // that has been pushed
 #define SLL_push_first(first, last, new_node, next)                  \

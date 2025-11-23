@@ -43,6 +43,8 @@
   X(C_TOKEN_COMPARE_NOT_EQUAL)          \
   X(C_TOKEN_LOGICAL_AND)                \
   X(C_TOKEN_LOGICAL_OR)                 \
+  X(C_TOKEN_QUESTION)                   \
+  X(C_TOKEN_COLON)                      \
   X(C_TOKEN_LITERAL_STRING)             \
   X(C_TOKEN_LITERAL_CHAR)               \
   X(C_TOKEN_LITERAL_INT)                \
@@ -86,7 +88,8 @@
   X(C_TOKEN_KEYWORD_UNSIGNED)           \
   X(C_TOKEN_KEYWORD_SIGNED)             \
   X(C_TOKEN_IDENTIFIER)                 \
-  X(C_TOKEN_EOF)
+  X(C_TOKEN_EOF)                        \
+  X(C_TOKEN_COUNT)
 
 ENUM_TABLE(C_Token_Type);
 
@@ -142,6 +145,9 @@ static C_Token_Type c_token_table[][3] =
   ['<'] = {C_TOKEN_LESS_THAN,          C_TOKEN_NONE,          C_TOKEN_LESS_THAN_EQUAL},
   ['>'] = {C_TOKEN_GREATER_THAN,       C_TOKEN_NONE,          C_TOKEN_GREATER_THAN_EQUAL},
   ['!'] = {C_TOKEN_LOGICAL_NOT,        C_TOKEN_NONE,          C_TOKEN_COMPARE_NOT_EQUAL},
+
+  ['?'] = {C_TOKEN_QUESTION,           C_TOKEN_NONE,          C_TOKEN_NONE},
+  [':'] = {C_TOKEN_COLON,              C_TOKEN_NONE,          C_TOKEN_NONE},
 };
 
 typedef struct C_Keyword_Info C_Keyword_Info;
@@ -241,6 +247,8 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
 
           if (c == '\n')
           {
+            // Leave dealing with new line to outer loop...
+            // centralize logic related to counting lines and columns
             break;
           }
 
@@ -254,6 +262,7 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
         while (c_lexer_incomplete(*lexer))
         {
           u8 c = *c_lexer_at(*lexer);
+          c_lexer_advance(lexer, 1);
 
           // Stick with the normal c behavior where you can't nest these :(
           // could just keep a counter of how many begin blocks we find...
@@ -262,8 +271,6 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
           {
             break;
           }
-
-          c_lexer_advance(lexer, 1);
 
           prev = c;
         }

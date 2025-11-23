@@ -5,7 +5,9 @@ NO_WARNINGS := -Wno-unused-parameter -Wno-unused-function -Wno-override-init
 
 OPTIMIZATION := -O2
 
-CFLAGS := -g -std=c11 -DDEBUG -DPROFILE ${ON_WARNINGS} ${NO_WARNINGS} ${OPTIMIZATION}
+DEFAULT_FLAGS := -g -std=c11 -DDEBUG -DPROFILE ${ON_WARNINGS} ${NO_WARNINGS}
+TEST_FLAGS := ${DEFAULT_FLAGS}
+CFLAGS := ${DEFAULT_FLAGS} ${OPTIMIZATION}
 
 # Lucky number
 TRY_FOR_MIN_TIME := 7
@@ -29,18 +31,18 @@ address-anatomy: bin-folder
 	gcc ${CFLAGS} src/address_anatomy.c -o bin/address_anatomy.x
 	bin/address_anatomy.x
 
-tests: test-common test-arguments
+tests: test-common test-arguments test-c-tokenize
 
 test-common: bin-folder
-	gcc ${CFLAGS} src/tests/test_common.c -o bin/test_common.x
+	gcc ${TEST_FLAGS} src/tests/test_common.c -o bin/test_common.x
 	bin/test_common.x
 
 test-arguments: bin-folder
-	gcc ${CFLAGS} src/tests/test_arguments.c -o bin/test_arguments.x
+	gcc ${TEST_FLAGS} src/tests/test_arguments.c -o bin/test_arguments.x
 	bin/test_arguments.x positional --verbose -v --foo --bar --baz=foo,bar,boo positional2 --bunk=bip,bop,bam,
 
 test-c-tokenize: bin-folder
-	gcc ${CFLAGS} src/tests/test_c_tokenize.c -o bin/test_c_tokenize.x
+	gcc ${TEST_FLAGS} src/tests/test_c_tokenize.c -o bin/test_c_tokenize.x
 	bin/test_c_tokenize.x
 
 reptest-file-apis: bin-folder

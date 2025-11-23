@@ -435,7 +435,11 @@ void scratch_close(Scratch *scratch);
 
 b32 char_is_whitespace(u8 c);
 b32 char_is_digit(u8 c);
+b32 char_is_digit_base(u8 c, usize base);
 b32 char_is_alphabetic(u8 c);
+
+u8 char_to_digit(u8 c);
+u8 char_to_digit_base(u8 c, usize base);
 
 b32 string_in_bounds(String string, usize at);
 u32 string_hash_u32(String string);
@@ -605,9 +609,71 @@ b32 char_is_digit(u8 c)
   return c >= '0' && c <= '9';
 }
 
+b32 char_is_digit_base(u8 c, usize base)
+{
+  b32 result = false;
+  if (base == 10)
+  {
+    result = char_is_digit(c);
+  }
+  else if (base == 2)
+  {
+    result = (c == '0' || c == '1');
+  }
+  else if (base == 16)
+  {
+    b32 is_valid_letter = ((c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
+    result = (char_is_digit(c) || is_valid_letter);
+  }
+
+  return result;
+}
+
 b32 char_is_alphabetic(u8 c)
 {
   return char_is_uppercase(c) || char_is_lowercase(c);
+}
+
+u8 char_to_digit(u8 c)
+{
+  u8 digit = 0;
+
+  if (char_is_digit(c))
+  {
+    digit = c - '0';
+  }
+
+  return digit;
+}
+
+u8 char_to_digit_base(u8 c, usize base)
+{
+  u8 digit = 0;
+
+  if (char_is_digit_base(c, base))
+  {
+    if (base == 10 || base == 2)
+    {
+      digit = c - '0';
+    }
+    else if (base == 16)
+    {
+      if (char_is_digit(c))
+      {
+        digit = c - '0';
+      }
+      else if (c >= 'A' && c <= 'F')
+      {
+        digit = (c - 'A') + 10;
+      }
+      else if (c >= 'a' && c <= 'f')
+      {
+        digit = (c - 'a') + 10;
+      }
+    }
+  }
+
+  return digit;
 }
 
 b32 string_in_bounds(String string, usize at)

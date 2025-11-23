@@ -111,7 +111,7 @@ struct C_Token
       u64 v;
     } int_literal;
     u8  char_literal;
-    u64 float_literal;
+    f64 float_literal;
   };
 };
 
@@ -218,7 +218,7 @@ b32 c_lexer_incomplete(C_Lexer lexer)
 }
 
 static
-u8 *c_lexer_at(C_Lexer lexer)
+u8 *c_lexer_curr_at(C_Lexer lexer)
 {
   ASSERT(c_lexer_incomplete(lexer), "Out of bounds access in C lexer.");
   return lexer.source.v + lexer.at;
@@ -236,7 +236,7 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
 {
   while (c_lexer_incomplete(*lexer))
   {
-    u8 curr_char = *c_lexer_at(*lexer);
+    u8 curr_char = *c_lexer_curr_at(*lexer);
 
     // Count lines... reset columns, advance
     if (curr_char == '\n')
@@ -247,13 +247,13 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
     }
     else if (curr_char == '/' && c_lexer_in_bounds(*lexer, lexer->at + 1))
     {
-      u8 next_char = c_lexer_at(*lexer)[1];
+      u8 next_char = c_lexer_curr_at(*lexer)[1];
 
       if (next_char == '/') // Single line
       {
         while (c_lexer_incomplete(*lexer))
         {
-          u8 c = *c_lexer_at(*lexer);
+          u8 c = *c_lexer_curr_at(*lexer);
 
           if (c == '\n')
           {
@@ -271,7 +271,7 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
 
         while (c_lexer_incomplete(*lexer))
         {
-          u8 c = *c_lexer_at(*lexer);
+          u8 c = *c_lexer_curr_at(*lexer);
 
           // FIXME: Not thrilled about having to handle new lines in more than one place.
           if (curr_char == '\n')
@@ -306,7 +306,7 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
     {
       while (c_lexer_incomplete(*lexer))
       {
-        u8 c = *c_lexer_at(*lexer);
+        u8 c = *c_lexer_curr_at(*lexer);
 
         if (c == '\n')
         {
@@ -336,7 +336,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
   while (c_lexer_eat_whitespace_comments_preprocessor(&lexer), c_lexer_incomplete(lexer))
   {
-    u8 curr_char = *c_lexer_at(lexer);
+    u8 curr_char = *c_lexer_curr_at(lexer);
 
     C_Token token = {0};
     token.line   = lexer.lines_processed + 1;
@@ -469,114 +469,118 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
       token.raw  = string_substring(lexer.source, lexer.at, end);
     }
 
-    // TODO: Simplify?
     else if (char_is_digit(curr_char)) // Number literal
     {
       // By default
       token.type = C_TOKEN_LITERAL_INT;
       token.int_literal.base = 10;
 
-      usize end = lexer.at + 1;
-      while (c_lexer_in_bounds(lexer, end))
+      usize end = lexer.at;
+
+      // TODO: Make sure that there is at least one more digit following a base signifier (e.g. 0x1 valid but 0x not valid)
+      if (curr_char == '0' && c_lexer_in_bounds(lexer, end + 1))
       {
-        u8 c = lexer.source.v[end];
+        u8 c = lexer.source.v[end + 1];
         if (c == 'x' || c == 'X')
         {
-          if (end - lexer.at == 1) // Should be second character
-          {
-            token.int_literal.base = 16;
-
-            end += 1;
-          }
-          else
-          {
-            token.type = C_TOKEN_NONE;
-            break;
-          }
+          token.int_literal.base = 16;
+          end += 2;
         }
         else if (c == 'b' || c == 'B')
         {
-          if (end - lexer.at == 1) // Should be second character
-          {
-            token.int_literal.base = 2;
+          token.int_literal.base = 2;
+          end += 2;
+        }
+      }
 
-            end += 1;
-          }
-          else
-          {
-            // TODO: This would be an error
-            token.type = C_TOKEN_NONE;
-            break;
-          }
+      while (c_lexer_in_bounds(lexer, end) && char_is_digit_base(lexer.source.v[end], token.int_literal.base))
+      {
+        u64 digit = char_to_digit_base(lexer.source.v[end], token.int_literal.base);
+        u64 base  = token.int_literal.base;
+        token.int_literal.v = base * token.int_literal.v + digit;
+        end += 1;
+      }
+
+      // Collect decimals if present
+      if (c_lexer_in_bounds(lexer, end) && lexer.source.v[end] == '.')
+      {
+        token.type = C_TOKEN_LITERAL_DOUBLE;
+        end += 1;
+
+        // FIXME: Handle gracefully
+        ASSERT(token.int_literal.base == 10, "Float tokens should not be any other base");
+
+        token.float_literal = (f64)token.int_literal.v;
+
+        f64 factor = 1.0 / 10.0;
+        while (c_lexer_in_bounds(lexer, end) && char_is_digit(lexer.source.v[end]))
+        {
+          u64 digit = lexer.source.v[end] - '0';
+          token.float_literal = (f64)token.float_literal + (factor * (f64)digit);
+          factor *= 1.0 / 10.0;
+
+          end += 1;
         }
-        else if (char_is_digit(c))
+      }
+
+      if (c_lexer_in_bounds(lexer, end) &&
+          (lexer.source.v[end] == 'e' || lexer.source.v[end] == 'E'))
+      {
+        token.type = C_TOKEN_LITERAL_DOUBLE;
+        end += 1;
+
+        // TODO: Evaluate digits
+        while (c_lexer_in_bounds(lexer, end) && char_is_digit(lexer.source.v[end]))
         {
           end += 1;
         }
-        else if (c == '.' || c == 'E' || c == 'e')
+      }
+
+      // HACK: Could maybe be prettier.
+      if (c_lexer_in_bounds(lexer, end)) // Chech for f, ul, ll, LL, etc
+      {
+        u8 c = lexer.source.v[end];
+        if (c == 'f' || c == 'F')
         {
-          token.type = C_TOKEN_LITERAL_DOUBLE;
-          end += 1;
-        }
-        else if (c == 'f' || c == 'F') // float, marks end, so break
-        {
+          // TODO: Verify that what we have so far is a valid float literal
           token.type = C_TOKEN_LITERAL_FLOAT;
           end += 1;
-          break;
         }
-        else if (c == 'u' || c == 'U') // unsigned, unsigned long, or unsigned long long, marks the end, so break after
+        else if (c == 'u' || c == 'U')
         {
           token.type = C_TOKEN_LITERAL_UNSIGNED_INT;
           end += 1;
 
-          if (c_lexer_in_bounds(lexer, end))
+          if (c_lexer_in_bounds(lexer, end) &&
+              (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
           {
-            c = lexer.source.v[end];
-            if (c == 'l' || c == 'L')
-            {
-              token.type = C_TOKEN_LITERAL_UNSIGNED_LONG;
-              end += 1;
+            token.type = C_TOKEN_LITERAL_UNSIGNED_LONG;
+            end += 1;
 
-              if (c_lexer_in_bounds(lexer, end))
-              {
-                c = lexer.source.v[end];
-                if (c == 'L')
-                {
-                  end += 1;
-                  token.type = C_TOKEN_LITERAL_UNSIGNED_LONG_LONG;
-                }
-              }
+            if (c_lexer_in_bounds(lexer, end) &&
+                (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
+            {
+              token.type = C_TOKEN_LITERAL_UNSIGNED_LONG_LONG;
+              end += 1;
             }
           }
-
-          break;
         }
-        else if (c == 'l' || c == 'L') // long or long long, marks the end, so break after
+        else if (c == 'l' || c == 'L')
         {
           token.type = C_TOKEN_LITERAL_LONG;
           end += 1;
 
-          if (c_lexer_in_bounds(lexer, end))
+          if (c_lexer_in_bounds(lexer, end) &&
+              (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
           {
-            c = lexer.source.v[end];
-            if (c == 'l' || c == 'L')
-            {
               token.type = C_TOKEN_LITERAL_LONG_LONG;
               end += 1;
-            }
           }
-
-          break;
-        }
-        else
-        {
-          break;
         }
       }
 
       token.raw = string_substring(lexer.source, lexer.at, end);
     }
-
 
     usize advance = 1; // We'll just skip ahead if we haven't gotten a real token... maybe not best plan?
     if (token.type != C_TOKEN_NONE)

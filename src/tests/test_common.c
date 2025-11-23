@@ -305,6 +305,21 @@ int main(int argc, char **argv)
   }
 
   {
+    const char *label = "char_is_digit_base";
+    PRINT_EVAL(label, char_is_digit_base('0', 2));
+    PRINT_EVAL(label, char_is_digit_base('1', 2));
+    PRINT_EVAL(label, !char_is_digit_base('5', 2));
+    PRINT_EVAL(label, char_is_digit_base('9', 10));
+    PRINT_EVAL(label, !char_is_digit_base('A', 10));
+    PRINT_EVAL(label, char_is_digit_base('0', 16));
+    PRINT_EVAL(label, char_is_digit_base('a', 16));
+    PRINT_EVAL(label, char_is_digit_base('A', 16));
+    PRINT_EVAL(label, char_is_digit_base('f', 16));
+    PRINT_EVAL(label, char_is_digit_base('F', 16));
+    PRINT_EVAL(label, !char_is_digit_base('g', 10));
+  }
+
+  {
     const char *label = "string_hash_u32";
     String string1 = String("Hello");
     String string2 = String("Hello");

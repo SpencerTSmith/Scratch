@@ -49,6 +49,8 @@ Profile_Pass __profile_begin_pass(String name, usize zone_index, u64 bytes_proce
 static
 void __profile_close_pass(Profile_Pass pass);
 
+// TODO: Can redo the PROFILE_SCOPE macro to use a member from pass to check scope
+
 #ifdef PROFILE
   // Only works for unity builds, but I do those anyways
   #define profile_begin_pass(name) __profile_begin_pass(String(name), __COUNTER__ + 1, 0) // First zone is never used, so the default parent 0 doesn't get junk info

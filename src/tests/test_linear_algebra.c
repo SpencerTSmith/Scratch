@@ -1,6 +1,8 @@
 #define COMMON_IMPLEMENTATION
 #include "../common.h"
 
+#include "testing.h"
+
 #include "../linear_algebra.h"
 #include "../linear_algebra.c"
 
@@ -13,6 +15,7 @@ int main(int argc, char **argv)
 {
   Arena arena = arena_make();
 
+  TEST_BLOCK(STR("Test"))
   {
     const char *label = "vec2 construction";
     vec2 v = vec2(3.0f, 4.0f);

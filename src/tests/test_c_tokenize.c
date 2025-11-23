@@ -274,6 +274,12 @@ int main(int argc, char **argv)
     PRINT_EVAL(label, string_match(tokens.v[3].raw, STR("789LL")));
     PRINT_EVAL(label, string_match(tokens.v[4].raw, STR("999uL")));
     PRINT_EVAL(label, string_match(tokens.v[5].raw, STR("111uLL")));
+    PRINT_EVAL(label, tokens.v[0].int_literal.v == 42);
+    PRINT_EVAL(label, tokens.v[1].int_literal.v == 123);
+    PRINT_EVAL(label, tokens.v[2].int_literal.v == 456);
+    PRINT_EVAL(label, tokens.v[3].int_literal.v == 789);
+    PRINT_EVAL(label, tokens.v[4].int_literal.v == 999);
+    PRINT_EVAL(label, tokens.v[5].int_literal.v == 111);
 
     arena_clear(&arena);
   }
@@ -291,6 +297,8 @@ int main(int argc, char **argv)
     PRINT_EVAL(label, string_match(tokens.v[1].raw, STR("2.5f")));
     PRINT_EVAL(label, string_match(tokens.v[2].raw, STR("1.0e10")));
     PRINT_EVAL(label, string_match(tokens.v[3].raw, STR("6.022E23")));
+    PRINT_EVAL(label, tokens.v[0].float_literal == 3.14);
+    PRINT_EVAL(label, tokens.v[1].float_literal == 2.5);
 
     arena_clear(&arena);
   }
@@ -487,16 +495,23 @@ int main(int argc, char **argv)
   {
     const char *label = "Different base integer literals";
 
-    C_Token_Array tokens = tokenize_c_code(&arena, STR("0x42 0x12L 0b01u 10LL"));
-    PRINT_EVAL(label, tokens.count == 4);
+    C_Token_Array tokens = tokenize_c_code(&arena, STR("0x42 0x12L 0b11u 0b10 0xFA"));
+    PRINT_EVAL(label, tokens.count == 5);
     PRINT_EVAL(label, tokens.v[0].type == C_TOKEN_LITERAL_INT);
     PRINT_EVAL(label, tokens.v[1].type == C_TOKEN_LITERAL_LONG);
     PRINT_EVAL(label, tokens.v[2].type == C_TOKEN_LITERAL_UNSIGNED_INT);
-    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_LITERAL_LONG_LONG);
-    PRINT_EVAL(label, tokens.v[1].int_literal.base == 16);
+    PRINT_EVAL(label, tokens.v[3].type == C_TOKEN_LITERAL_INT);
+    PRINT_EVAL(label, tokens.v[4].type == C_TOKEN_LITERAL_INT);
     PRINT_EVAL(label, tokens.v[0].int_literal.base == 16);
+    PRINT_EVAL(label, tokens.v[1].int_literal.base == 16);
     PRINT_EVAL(label, tokens.v[2].int_literal.base == 2);
-    PRINT_EVAL(label, tokens.v[3].int_literal.base == 10);
+    PRINT_EVAL(label, tokens.v[3].int_literal.base == 2);
+    PRINT_EVAL(label, tokens.v[4].int_literal.base == 16);
+    PRINT_EVAL(label, tokens.v[0].int_literal.v == 66);
+    PRINT_EVAL(label, tokens.v[1].int_literal.v == 18);
+    PRINT_EVAL(label, tokens.v[2].int_literal.v == 3);
+    PRINT_EVAL(label, tokens.v[3].int_literal.v == 2);
+    PRINT_EVAL(label, tokens.v[4].int_literal.v == 250);
 
     arena_clear(&arena);
   }

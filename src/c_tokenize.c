@@ -74,6 +74,7 @@
   X(C_TOKEN_KEYWORD_CONST)              \
   X(C_TOKEN_KEYWORD_STATIC)             \
   X(C_TOKEN_KEYWORD_RESTRICT)           \
+  X(C_TOKEN_KEYWORD_VOLATILE)           \
   X(C_TOKEN_KEYWORD_EXTERN)             \
   X(C_TOKEN_KEYWORD_INLINE)             \
   X(C_TOKEN_KEYWORD_SIZEOF)             \
@@ -187,6 +188,7 @@ static C_Keyword_Info c_keywords[] =
   {STR("static"),   C_TOKEN_KEYWORD_STATIC},
   {STR("extern"),   C_TOKEN_KEYWORD_EXTERN},
   {STR("restrict"), C_TOKEN_KEYWORD_RESTRICT},
+  {STR("volatile"), C_TOKEN_KEYWORD_VOLATILE},
   {STR("inline"),   C_TOKEN_KEYWORD_INLINE},
   {STR("sizeof"),   C_TOKEN_KEYWORD_SIZEOF},
   {STR("register"), C_TOKEN_KEYWORD_REGISTER},

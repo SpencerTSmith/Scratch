@@ -5,7 +5,7 @@ NO_WARNINGS := -Wno-unused-parameter -Wno-unused-function -Wno-override-init
 
 OPTIMIZATION := -O2
 
-DEFAULT_FLAGS := -g -std=c11 -DDEBUG -DPROFILE ${ON_WARNINGS} ${NO_WARNINGS}
+DEFAULT_FLAGS := -g -lm -std=c11 -DDEBUG -DPROFILE ${ON_WARNINGS} ${NO_WARNINGS}
 TEST_FLAGS := ${DEFAULT_FLAGS}
 CFLAGS := ${DEFAULT_FLAGS} ${OPTIMIZATION}
 
@@ -44,6 +44,10 @@ test-arguments: bin-folder
 test-c-tokenize: bin-folder
 	gcc ${TEST_FLAGS} src/tests/test_c_tokenize.c -o bin/test_c_tokenize.x
 	bin/test_c_tokenize.x
+
+test-linear-algebra: bin-folder
+	gcc ${TEST_FLAGS} src/tests/test_linear_algebra.c -o bin/test_linear_algebra.x
+	bin/test_linear_algebra.x
 
 reptest-file-apis: bin-folder
 	head -c 1G /dev/urandom > gb_file.txt

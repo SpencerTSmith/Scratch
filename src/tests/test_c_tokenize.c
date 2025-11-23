@@ -78,30 +78,6 @@ int main(int argc, char **argv)
 
     arena_clear(&arena);
   }
-  {
-    String taco = read_file_to_arena(&arena, STR("taco_test.txt"));
-
-    C_Token_Array tokens = tokenize_c_code(&arena, taco);
-    for EACH_INDEX(token_idx, tokens.count)
-    {
-      C_Token token = tokens.v[token_idx];
-      printf("Token %lu: %s [ %.*s ]\n",
-             token_idx, C_Token_Type_strings[token.type], STRF(token.raw));
-    }
-
-    for EACH_INDEX(token_idx, tokens.count)
-    {
-      C_Token token = tokens.v[token_idx];
-      printf("%.*s ", STRF(token.raw));
-      if (token.type == C_TOKEN_SEMICOLON || token.type == C_TOKEN_BEGIN_CURLY_BRACE || token.type == C_TOKEN_CLOSE_CURLY_BRACE)
-      {
-        printf("\n");
-      }
-    }
-    printf("\n");
-
-    arena_clear(&arena);
-  }
 
   {
     const char *label = "Single character tokens";

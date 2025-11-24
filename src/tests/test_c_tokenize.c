@@ -279,7 +279,7 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Float literals"))
   {
-    C_Token_Array tokens = tokenize_c_code(&arena, STR("3.14 2.5f 1.0e10 6.022E23"));
+    C_Token_Array tokens = tokenize_c_code(&arena, STR("3.14 2.5f 1.0e10 6.022E-23"));
     TEST_EVAL(tokens.count == 4);
     TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_DOUBLE);
     TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_FLOAT);
@@ -288,9 +288,11 @@ int main(int argc, char **argv)
     TEST_EVAL(string_match(tokens.v[0].raw, STR("3.14")));
     TEST_EVAL(string_match(tokens.v[1].raw, STR("2.5f")));
     TEST_EVAL(string_match(tokens.v[2].raw, STR("1.0e10")));
-    TEST_EVAL(string_match(tokens.v[3].raw, STR("6.022E23")));
-    TEST_EVAL(tokens.v[0].float_literal == 3.14);
-    TEST_EVAL(tokens.v[1].float_literal == 2.5);
+    TEST_EVAL(string_match(tokens.v[3].raw, STR("6.022E-23")));
+    TEST_EVAL(EPSILON_EQUAL(tokens.v[0].float_literal, 3.14));
+    TEST_EVAL(EPSILON_EQUAL(tokens.v[1].float_literal, 2.5));
+    TEST_EVAL(EPSILON_EQUAL(tokens.v[2].float_literal, (1.0 * pow(10, 10))));
+    TEST_EVAL(EPSILON_EQUAL(tokens.v[3].float_literal, (6.022 * pow(10, -23))));
 
     arena_clear(&arena);
   }

@@ -58,4 +58,9 @@ void __test_close_block(Tester_Block *block);
                                                                                                               \
   )
 
+#define EPSILON_EQUAL(a, b) (fabs((a) - (b)) < 0.0001f)
+#define VEC2_EPSILON_EQUAL(v1, v2) (EPSILON_EQUAL((v1).x, (v2).x) && EPSILON_EQUAL((v1).y, (v2).y))
+#define VEC3_EPSILON_EQUAL(v1, v2) (EPSILON_EQUAL((v1).x, (v2).x) && EPSILON_EQUAL((v1).y, (v2).y) && EPSILON_EQUAL((v1).z, (v2).z))
+#define VEC4_EPSILON_EQUAL(v1, v2) (EPSILON_EQUAL((v1).x, (v2).x) && EPSILON_EQUAL((v1).y, (v2).y) && EPSILON_EQUAL((v1).z, (v2).z) && EPSILON_EQUAL((v1).w, (v2).w))
+
 #endif // TESTING_H

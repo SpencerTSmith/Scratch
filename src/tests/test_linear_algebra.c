@@ -7,11 +7,6 @@
 #include "../linear_algebra.h"
 #include "../linear_algebra.c"
 
-#define EPSILON_EQUAL(a, b) (fabsf((a) - (b)) < 0.0001f)
-#define VEC2_EPSILON_EQUAL(v1, v2) (EPSILON_EQUAL((v1).x, (v2).x) && EPSILON_EQUAL((v1).y, (v2).y))
-#define VEC3_EPSILON_EQUAL(v1, v2) (EPSILON_EQUAL((v1).x, (v2).x) && EPSILON_EQUAL((v1).y, (v2).y) && EPSILON_EQUAL((v1).z, (v2).z))
-#define VEC4_EPSILON_EQUAL(v1, v2) (EPSILON_EQUAL((v1).x, (v2).x) && EPSILON_EQUAL((v1).y, (v2).y) && EPSILON_EQUAL((v1).z, (v2).z) && EPSILON_EQUAL((v1).w, (v2).w))
-
 int main(int argc, char **argv)
 {
   Arena arena = arena_make();

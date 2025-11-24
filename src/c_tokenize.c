@@ -501,14 +501,12 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         end += 1;
       }
 
-      // Collect decimals if present
-      if (c_lexer_in_bounds(lexer, end) && lexer.source.v[end] == '.')
+      // Collect decimals if present and haven't changed base
+      if (token.int_literal.base == 10 &&
+          c_lexer_in_bounds(lexer, end) && lexer.source.v[end] == '.')
       {
         token.type = C_TOKEN_LITERAL_DOUBLE;
         end += 1;
-
-        // FIXME: Handle gracefully
-        ASSERT(token.int_literal.base == 10, "Float tokens should not be any other base");
 
         token.float_literal = (f64)token.int_literal.v;
 
@@ -523,30 +521,45 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         }
       }
 
-      if (c_lexer_in_bounds(lexer, end) &&
+      // A floating point literal can have an Exponent part without also having a decimal
+      if (token.int_literal.base == 10  &&
+          c_lexer_in_bounds(lexer, end) &&
           (lexer.source.v[end] == 'e' || lexer.source.v[end] == 'E'))
       {
         token.type = C_TOKEN_LITERAL_DOUBLE;
         end += 1;
 
-        // TODO: Evaluate digits
-        while (c_lexer_in_bounds(lexer, end) && char_is_digit(lexer.source.v[end]))
+        f64 sign = 1;
+        if (c_lexer_in_bounds(lexer, end) && lexer.source.v[end] == '-')
         {
+          sign = -1;
           end += 1;
         }
+
+        // TODO: Gracefully error when we have an E but no digits afterwards
+
+        f64 exponent = 0;
+        while (c_lexer_in_bounds(lexer, end) && char_is_digit(lexer.source.v[end]))
+        {
+          u64 digit = char_to_digit(lexer.source.v[end]);
+          exponent = 10 * exponent + digit;
+          end += 1;
+        }
+
+        token.float_literal *= pow(10.0, sign * exponent);
       }
 
-      // HACK: Could maybe be prettier.
+      // TODO: Apparently there are long doubles?
+
       if (c_lexer_in_bounds(lexer, end)) // Chech for f, ul, ll, LL, etc
       {
         u8 c = lexer.source.v[end];
-        if (c == 'f' || c == 'F')
+        if (token.type == C_TOKEN_LITERAL_DOUBLE && (c == 'f' || c == 'F'))
         {
-          // TODO: Verify that what we have so far is a valid float literal
           token.type = C_TOKEN_LITERAL_FLOAT;
           end += 1;
         }
-        else if (c == 'u' || c == 'U')
+        else if (token.type == C_TOKEN_LITERAL_INT && (c == 'u' || c == 'U'))
         {
           token.type = C_TOKEN_LITERAL_UNSIGNED_INT;
           end += 1;
@@ -565,7 +578,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
             }
           }
         }
-        else if (c == 'l' || c == 'L')
+        else if (token.type == C_TOKEN_LITERAL_INT && (c == 'l' || c == 'L'))
         {
           token.type = C_TOKEN_LITERAL_LONG;
           end += 1;

@@ -521,6 +521,8 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         }
       }
 
+      // TODO: Gracefully handle when we have an E but no digits afterwards, should not produce a float but reverse literal
+
       // A floating point literal can have an Exponent part without also having a decimal
       if (token.int_literal.base == 10  &&
           c_lexer_in_bounds(lexer, end) &&
@@ -535,8 +537,6 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           sign = -1;
           end += 1;
         }
-
-        // TODO: Gracefully error when we have an E but no digits afterwards
 
         f64 exponent = 0;
         while (c_lexer_in_bounds(lexer, end) && char_is_digit(lexer.source.v[end]))

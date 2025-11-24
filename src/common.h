@@ -801,8 +801,6 @@ String string_trim_whitespace(String string)
 // Start inclusive, stop exclusive
 String string_substring(String string, usize start, usize stop)
 {
-  ASSERT(start <= stop, "Invalid substring range [%lu:%lu]", start, stop);
-
   String result = string;
 
   usize clamp_start = MIN(start, string.count);
@@ -815,22 +813,24 @@ String string_substring(String string, usize start, usize stop)
 
 usize string_find_substring(String string, usize start, String substring)
 {
-  ASSERT(substring.count, "Substring shouldn't be empty");
-
   isize result = string.count;
-  usize comparison_count = string.count - substring.count + 1;
 
-  for (usize i = start; i < comparison_count; i++)
+  if (substring.count)
   {
-    // Only do full check if first char matches
-    if (string.v[i] == substring.v[0])
-    {
-      String to_compare = string_substring(string, i, i + substring.count);
+    usize comparison_count = string.count - substring.count + 1;
 
-      if (string_match(to_compare, substring))
+    for (usize i = start; i < comparison_count; i++)
+    {
+      // Only do full check if first char matches
+      if (string.v[i] == substring.v[0])
       {
-        result = i;
-        break;
+        String to_compare = string_substring(string, i, i + substring.count);
+
+        if (string_match(to_compare, substring))
+        {
+          result = i;
+          break;
+        }
       }
     }
   }

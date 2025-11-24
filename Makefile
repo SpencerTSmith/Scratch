@@ -123,3 +123,9 @@ reptest-pathologic-cache: bin-folder
 	ar rcs bin/reptest_pathologic_cache.a bin/reptest_pathologic_cache.o
 	gcc ${CFLAGS} src/reptests/reptest_pathologic_cache.c bin/reptest_pathologic_cache.a -o bin/reptest_pathologic_cache.x
 	bin/reptest_pathologic_cache.x $(TRY_FOR_MIN_TIME)
+
+reptest-non-temporal: bin-folder
+	nasm -f elf64 -o bin/reptest_non_temporal.o src/reptests/reptest_non_temporal.asm
+	ar rcs bin/reptest_non_temporal.a bin/reptest_non_temporal.o
+	gcc ${CFLAGS} src/reptests/reptest_non_temporal.c bin/reptest_non_temporal.a -o bin/reptest_non_temporal.x
+	bin/reptest_non_temporal.x $(TRY_FOR_MIN_TIME)

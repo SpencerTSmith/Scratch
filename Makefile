@@ -3,7 +3,7 @@ SHELL := bash
 ON_WARNINGS := -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-align -Wredundant-decls
 NO_WARNINGS := -Wno-unused-parameter -Wno-unused-function -Wno-override-init
 
-OPTIMIZATION := -O2
+OPTIMIZATION := -O0
 
 DEFAULT_FLAGS := -g -lm -std=c11 -DDEBUG -DPROFILE ${ON_WARNINGS} ${NO_WARNINGS}
 TEST_FLAGS := ${DEFAULT_FLAGS}
@@ -129,3 +129,9 @@ reptest-non-temporal: bin-folder
 	ar rcs bin/reptest_non_temporal.a bin/reptest_non_temporal.o
 	gcc ${CFLAGS} src/reptests/reptest_non_temporal.c bin/reptest_non_temporal.a -o bin/reptest_non_temporal.x
 	bin/reptest_non_temporal.x $(TRY_FOR_MIN_TIME)
+
+reptest-prefetch: bin-folder
+	nasm -f elf64 -o bin/reptest_prefetch.o src/reptests/reptest_prefetch.asm
+	ar rcs bin/reptest_prefetch.a bin/reptest_prefetch.o
+	gcc ${CFLAGS} src/reptests/reptest_prefetch.c bin/reptest_prefetch.a -o bin/reptest_prefetch.x
+	bin/reptest_prefetch.x $(TRY_FOR_MIN_TIME)

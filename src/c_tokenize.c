@@ -523,8 +523,11 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
       // TODO: Gracefully handle when we have an E but no digits afterwards, should not produce a float but reverse literal
 
-      // A floating point literal can have an Exponent part without also having a decimal
-      if (token.int_literal.base == 10  &&
+      // A floating point literal can have an Exponent part without also having a decimal,
+      // so check also if we have an integer base 10 so far
+      b32 maybe_exponent = token.type == C_TOKEN_LITERAL_DOUBLE || token.int_literal.base == 10;
+
+      if (maybe_exponent  &&
           c_lexer_in_bounds(lexer, end) &&
           (lexer.source.v[end] == 'e' || lexer.source.v[end] == 'E'))
       {

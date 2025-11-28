@@ -37,9 +37,10 @@ int main(int arg_count, char **args)
 
   u64 cacheline_size = 64;
 
-  u64 offsets[KB(512)] = {0};
+  usize offsets_count = MB(1);
+  u64 *offsets = os_allocate(offsets_count * sizeof(*offsets), OS_ALLOCATION_COMMIT|OS_ALLOCATION_PREFAULT);
 
-  u64 total_size_processed = STATIC_COUNT(offsets) * cacheline_size;
+  u64 total_size_processed = offsets_count * cacheline_size;
 
   u64 fake_op_counts[16] = {0};
 
@@ -59,12 +60,15 @@ int main(int arg_count, char **args)
 
       u64 line_count = data_count / cacheline_size;
 
-      // Random offsets
-      for (usize offset_idx = 0; offset_idx < STATIC_COUNT(offsets); offset_idx++)
+      // Another set of random offsets
+      for (usize offset_idx = 0; offset_idx < offsets_count; offset_idx++)
       {
         u64 *offset = offsets + offset_idx;
 
-        *offset = (rand() % (line_count)) * cacheline_size;
+        u64 random;
+        os_get_random_bytes(&random, sizeof(random));
+
+        *offset = (random % line_count) * cacheline_size;
       }
 
       Repetition_Tester *tester = &testers[fake_op_idx][func_idx];
@@ -77,7 +81,7 @@ int main(int arg_count, char **args)
       while (repetition_tester_is_testing(tester))
       {
         repetition_tester_begin_time(tester);
-        entry->function(data, offsets, STATIC_COUNT(offsets), *fake_op_count);
+        entry->function(data, offsets, offsets_count, *fake_op_count);
         repetition_tester_close_time(tester);
 
         repetition_tester_count_bytes(tester, total_size_processed);

@@ -3,7 +3,7 @@ SHELL := bash
 ON_WARNINGS := -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-align -Wredundant-decls
 NO_WARNINGS := -Wno-unused-parameter -Wno-unused-function -Wno-override-init
 
-OPTIMIZATION := -O0
+OPTIMIZATION := -O2
 
 DEFAULT_FLAGS := -g -lm -std=c11 -DDEBUG -DPROFILE ${ON_WARNINGS} ${NO_WARNINGS}
 TEST_FLAGS := ${DEFAULT_FLAGS}
@@ -135,3 +135,7 @@ reptest-prefetch: bin-folder
 	ar rcs bin/reptest_prefetch.a bin/reptest_prefetch.o
 	gcc ${CFLAGS} src/reptests/reptest_prefetch.c bin/reptest_prefetch.a -o bin/reptest_prefetch.x
 	bin/reptest_prefetch.x $(TRY_FOR_MIN_TIME)
+
+reptest-chunk-read: bin-folder
+	gcc ${CFLAGS} src/reptests/reptest_chunk_read.c -o bin/reptest_chunk_read.x
+	bin/reptest_chunk_read.x gb_file.txt $(TRY_FOR_MIN_TIME)

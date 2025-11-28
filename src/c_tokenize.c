@@ -444,31 +444,56 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     {
       usize end = lexer.at + 1;
 
-      usize escape_count = 0;
-      while (c_lexer_in_bounds(lexer, end))
+      if (c_lexer_in_bounds(lexer, end))
       {
         u8 c = lexer.source.v[end];
-        if (c == '\'' && escape_count % 2 == 0)
+
+        if (c != '\'') // Should not get an empty ''
         {
-          end += 1;
-          break;
-        }
-        else if (c == '\\')
-        {
-          end += 1;
-          escape_count += 1;
+          if (c == '\\') // Shit, escape... figure out which it is
+          {
+            end += 1;
+
+            if (c_lexer_in_bounds(lexer, end))
+            {
+              c = lexer.source.v[end];
+              switch (c)
+              {
+                case '\\': { token.char_literal = '\\'; } break;
+                case 'n':  { token.char_literal = '\n'; } break;
+                case 't':  { token.char_literal = '\t'; } break;
+
+                default:   { token.char_literal = 0;} break;
+              }
+
+              end += 1;
+            }
+          }
+          else // No escapes, we are good!
+          {
+            token.char_literal = c;
+            end += 1;
+          }
+
+          if (c_lexer_in_bounds(lexer, end) && lexer.source.v[end] == '\'')
+          {
+            end += 1;
+          }
+          else
+          {
+            // TODO: Handle gracefully, try to find a ' to end this token?
+            LOG_ERROR("Encountered character literal of more than one character.");
+          }
+
+          token.type = C_TOKEN_LITERAL_CHAR;
+          token.raw  = string_substring(lexer.source, lexer.at, end);
         }
         else
         {
-          end += 1;
-          escape_count = 0; // We encountered something else, reset escape count
+          LOG_ERROR("Encountered empty char literal.");
         }
       }
-
-      token.type = C_TOKEN_LITERAL_CHAR;
-      token.raw  = string_substring(lexer.source, lexer.at, end);
     }
-
     else if (char_is_digit(curr_char)) // Number literal
     {
       // By default
@@ -541,7 +566,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           end += 1;
         }
 
-        f64 exponent = 0;
+        f64 exponent = 0.0;
         while (c_lexer_in_bounds(lexer, end) && char_is_digit(lexer.source.v[end]))
         {
           u64 digit = char_to_digit(lexer.source.v[end]);

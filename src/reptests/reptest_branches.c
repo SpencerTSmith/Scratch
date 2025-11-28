@@ -38,7 +38,7 @@ void fill_buffer_branch_pattern(String buffer, Branch_Pattern pattern)
 {
   if (pattern == BRANCH_OS_RANDOM)
   {
-    if (!os_fill_buffer_random(buffer))
+    if (!os_get_random_bytes(buffer.v, buffer.count))
     {
       LOG_ERROR("Uh oh!");
     }

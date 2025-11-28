@@ -311,7 +311,7 @@ void *os_allocate(usize size, OS_Allocation_Flags flags);
 b32 os_commit(void *start, usize size);
 void os_deallocate(void *start, usize size);
 
-b32 os_fill_buffer_random(String buffer);
+b32 os_get_random_bytes(void *dst, usize count);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // MEMORY
@@ -1048,11 +1048,11 @@ void os_decommit(void *start, usize size)
   mprotect(start, size, PROT_NONE);
 }
 
-b32 os_fill_buffer_random(String buffer)
+b32 os_get_random_bytes(void *dst, usize count)
 {
-  usize result = getrandom(buffer.v, buffer.count, GRND_NONBLOCK); // Probably don't want to block
+  usize result = getrandom(dst, count, GRND_NONBLOCK); // Probably don't want to block
 
-  return result == buffer.count;
+  return result == count;
 }
 #elif OS_WINDOWS
 // TODO

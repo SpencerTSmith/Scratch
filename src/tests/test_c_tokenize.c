@@ -323,6 +323,10 @@ int main(int argc, char **argv)
     TEST_EVAL(string_match(tokens.v[1].raw, STR("'b'")));
     TEST_EVAL(string_match(tokens.v[2].raw, STR("'\\n'")));
     TEST_EVAL(string_match(tokens.v[3].raw, STR("'\\t'")));
+    TEST_EVAL(tokens.v[0].char_literal == 'a');
+    TEST_EVAL(tokens.v[1].char_literal == 'b');
+    TEST_EVAL(tokens.v[2].char_literal == '\n');
+    TEST_EVAL(tokens.v[3].char_literal == '\t');
 
     arena_clear(&arena);
   }

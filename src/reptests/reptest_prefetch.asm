@@ -29,8 +29,6 @@ read_no_fetch_asm:
 .fake:
   vpaddd ymm0, ymm0, ymm1
   vpaddd ymm1, ymm1, ymm0
-  vpaddd ymm0, ymm0, ymm1
-  vpaddd ymm1, ymm1, ymm0
 
   sub rcx, 1
   jnz .fake
@@ -59,8 +57,6 @@ read_prefetch_asm:
 
   ; Fake operation to take up time
 .fake:
-  vpaddd ymm0, ymm0, ymm1
-  vpaddd ymm1, ymm1, ymm0
   vpaddd ymm0, ymm0, ymm1
   vpaddd ymm1, ymm1, ymm0
 

@@ -194,7 +194,7 @@ JSON_Token get_json_token(JSON_Parser *parser)
         if (parser_token_is_literal(parser, string))
         {
           // No 'value' for this
-          token.type  = JSON_TOKEN_TRUE;
+          token.type = JSON_TOKEN_TRUE;
           parser_advance(parser, string.count);
         }
         else
@@ -210,7 +210,7 @@ JSON_Token get_json_token(JSON_Parser *parser)
         if (parser_token_is_literal(parser, string))
         {
           // No 'value' for this
-          token.type  = JSON_TOKEN_FALSE;
+          token.type = JSON_TOKEN_FALSE;
           parser_advance(parser, string.count);
         }
         else
@@ -226,7 +226,7 @@ JSON_Token get_json_token(JSON_Parser *parser)
         if (parser_token_is_literal(parser, string))
         {
           // No 'value' for this
-          token.type  = JSON_TOKEN_NULL;
+          token.type = JSON_TOKEN_NULL;
           parser_advance(parser, string.count);
         }
         else
@@ -405,6 +405,11 @@ JSON_Object *parse_json(Arena *arena, String source)
 
   profile_close_func();
 
+  if (parser.had_error)
+  {
+
+  }
+
   return outer;
 }
 
@@ -435,51 +440,29 @@ JSON_Object *lookup_json_object(JSON_Object *current, String key)
 static
 f64 json_object_to_f64(JSON_Object *object)
 {
-  ASSERT(object, "Must pass valid object to f64 conversion");
-
-  String val = object->value;
-  // Get sign.
-  usize at = 0;
-
-  f64 sign = 1.0;
-  if (val.count > at && val.v[at] == '-')
-  {
-    sign = -1.0;
-    at += 1;
-  }
-
   f64 result = 0.0;
 
-  // Before decimal
-  while (at < val.count)
+  if (object)
   {
-    u8 digit = val.v[at] - (u8)'0';
-    if (digit < 10)
+    String val = object->value;
+    // Get sign.
+    usize at = 0;
+
+    f64 sign = 1.0;
+    if (val.count > at && val.v[at] == '-')
     {
-      // We go left to right so each previous result is 10 times bigger
-      result = 10 * result + (f64)digit;
+      sign = -1.0;
       at += 1;
     }
-    else // Not a digit
-    {
-      break;
-    }
-  }
 
-  // After decimal (if there)
-  if (at < val.count && val.v[at] == '.')
-  {
-    at += 1;
-
-    f64 factor = 1.0 / 10.0;
+    // Before decimal
     while (at < val.count)
     {
       u8 digit = val.v[at] - (u8)'0';
       if (digit < 10)
       {
-        // We go left to right so each additional digit is 10 times smaller
-        result = result + factor * (f64)digit;
-        factor *= 1.0 / 10.0;
+        // We go left to right so each previous result is 10 times bigger
+        result = 10 * result + (f64)digit;
         at += 1;
       }
       else // Not a digit
@@ -487,7 +470,62 @@ f64 json_object_to_f64(JSON_Object *object)
         break;
       }
     }
+
+    // After decimal (if there)
+    if (at < val.count && val.v[at] == '.')
+    {
+      at += 1;
+
+      f64 factor = 1.0 / 10.0;
+      while (at < val.count)
+      {
+        u8 digit = val.v[at] - (u8)'0';
+        if (digit < 10)
+        {
+          // We go left to right so each additional digit is 10 times smaller
+          result = result + factor * (f64)digit;
+          factor *= 1.0 / 10.0;
+          at += 1;
+        }
+        else // Not a digit
+        {
+          break;
+        }
+      }
+    }
+
+    // Exponent
+    if (at < val.count && (val.v[at] == 'e' || val.v[at] == 'E'))
+    {
+      at += 1;
+
+      f64 e_sign = 1;
+      if (at < val.count && val.v[at] == '-')
+      {
+        e_sign = -1;
+      }
+
+      f64 exponent = 0.0;
+      while (at < val.count)
+      {
+        u8 digit = val.v[at] - (u8)'0';
+        if (digit < 10)
+        {
+          // We go left to right so each previous result is 10 times bigger
+          exponent = 10 * exponent + (f64)digit;
+          at += 1;
+        }
+        else // Not a digit
+        {
+          break;
+        }
+      }
+
+      result *= pow(10.0, e_sign * exponent);
+    }
+
+    result *= sign;
   }
 
-  return sign * result;
+  return result;
 }

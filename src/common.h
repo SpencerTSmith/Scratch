@@ -622,6 +622,10 @@ b32 char_is_digit_base(u8 c, usize base)
   {
     result = (c == '0' || c == '1');
   }
+  else if (base == 8)
+  {
+    result = c >= '0' && c <= '7';
+  }
   else if (base == 16)
   {
     b32 is_valid_letter = ((c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
@@ -654,7 +658,7 @@ u8 char_to_digit_base(u8 c, usize base)
 
   if (char_is_digit_base(c, base))
   {
-    if (base == 10 || base == 2)
+    if (base == 10 || base == 2 || base == 8)
     {
       digit = c - '0';
     }

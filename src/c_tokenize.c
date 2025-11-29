@@ -159,6 +159,23 @@ static C_Token_Type c_token_table[][3] =
   [':'] = {C_TOKEN_COLON,              C_TOKEN_NONE,          C_TOKEN_NONE},
 };
 
+// For checking character escapes, just took the list from wikipedia
+static u8 c_char_escape_table[] =
+{
+  ['a'] = '\a',
+  ['b'] = '\b',
+  ['e'] = '\e',
+  ['f'] = '\f',
+  ['n'] = '\n',
+  ['r'] = '\r',
+  ['t'] = '\t',
+  ['v'] = '\v',
+  ['\\'] = '\\',
+  ['\''] = '\'',
+  ['\"'] = '\"',
+  ['\?'] = '\?',
+};
+
 typedef struct C_Keyword_Info C_Keyword_Info;
 struct C_Keyword_Info
 {
@@ -166,7 +183,7 @@ struct C_Keyword_Info
   C_Token_Type type;
 };
 
-static C_Keyword_Info c_keywords[] =
+static C_Keyword_Info c_keyword_table[] =
 {
   {STR("for"),      C_TOKEN_KEYWORD_FOR},
   {STR("while"),    C_TOKEN_KEYWORD_WHILE},
@@ -396,13 +413,13 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
       token.raw  = string_substring(lexer.source, lexer.at, end);
 
       // Check for keyword match, probably too few keywords to see benefit from hashing
-      for (usize keyword_idx = 0; keyword_idx < STATIC_COUNT(c_keywords); keyword_idx += 1)
+      for (usize keyword_idx = 0; keyword_idx < STATIC_COUNT(c_keyword_table); keyword_idx += 1)
       {
-        C_Keyword_Info keyword = c_keywords[keyword_idx];
+        C_Keyword_Info keyword = c_keyword_table[keyword_idx];
 
         if (string_match(keyword.string, token.raw))
         {
-          token.type = c_keywords[keyword_idx].type;
+          token.type = c_keyword_table[keyword_idx].type;
         }
       }
 
@@ -420,19 +437,24 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
       while (c_lexer_in_bounds(lexer, end))
       {
         u8 c = lexer.source.v[end];
+        end += 1;
+
         if (c == '"' && escape_count % 2 == 0)
         {
-          end += 1;
           break;
         }
-        else if (c == '\\')
+        else if (c == '\\') // Escapes
         {
-          end += 1;
           escape_count += 1;
+        }
+        else if (c == '\n') // Uh, oh
+        {
+          // TODO: Other cases should watch out for?
+          LOG_ERROR("Encountered string literal without closing quotation mark on same line.");
+          break;
         }
         else
         {
-          end += 1;
           escape_count = 0; // We encountered something else, reset escape count
         }
       }
@@ -457,16 +479,33 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
             if (c_lexer_in_bounds(lexer, end))
             {
               c = lexer.source.v[end];
-              switch (c)
-              {
-                case '\\': { token.char_literal = '\\'; } break;
-                case 'n':  { token.char_literal = '\n'; } break;
-                case 't':  { token.char_literal = '\t'; } break;
 
-                default:   { token.char_literal = 0;} break;
+              u8 byte_base = 0;
+              if (c == 'x') // Hex byte escape
+              {
+                byte_base = 16;
+                end += 1; // Skip over the x
+              }
+              else if (char_is_digit_base(c, 8)) // Octal byte escape
+              {
+                byte_base = 8;
               }
 
-              end += 1;
+              if (byte_base) // We have a raw byte escape sequence, grab them digits
+              {
+                while (c_lexer_in_bounds(lexer, end) &&
+                       char_is_digit_base(lexer.source.v[end], byte_base))
+                {
+                  u8 digit = char_to_digit_base(lexer.source.v[end], byte_base);
+                  token.char_literal = (byte_base * token.char_literal) + digit;
+                  end += 1;
+                }
+              }
+              else if (c < STATIC_COUNT(c_char_escape_table)) // Just a normal escape
+              {
+                token.char_literal = c_char_escape_table[c];
+                end += 1;
+              }
             }
           }
           else // No escapes, we are good!
@@ -482,7 +521,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           else
           {
             // TODO: Handle gracefully, try to find a ' to end this token?
-            LOG_ERROR("Encountered character literal of more than one character.");
+            LOG_ERROR("Encountered incorrectly terminated character literal.");
           }
 
           token.type = C_TOKEN_LITERAL_CHAR;

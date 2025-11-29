@@ -313,12 +313,13 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Character literals"))
   {
-    C_Token_Array tokens = tokenize_c_code(&arena, STR("'a' 'b' '\\n' '\\t'"));
-    TEST_EVAL(tokens.count == 4);
+    C_Token_Array tokens = tokenize_c_code(&arena, STR("'a' 'b' '\\n' '\\t' '\\\\' "));
+    TEST_EVAL(tokens.count == 5);
     TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_CHAR);
     TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_CHAR);
     TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_CHAR);
     TEST_EVAL(tokens.v[3].type == C_TOKEN_LITERAL_CHAR);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_LITERAL_CHAR);
     TEST_EVAL(string_match(tokens.v[0].raw, STR("'a'")));
     TEST_EVAL(string_match(tokens.v[1].raw, STR("'b'")));
     TEST_EVAL(string_match(tokens.v[2].raw, STR("'\\n'")));
@@ -327,8 +328,24 @@ int main(int argc, char **argv)
     TEST_EVAL(tokens.v[1].char_literal == 'b');
     TEST_EVAL(tokens.v[2].char_literal == '\n');
     TEST_EVAL(tokens.v[3].char_literal == '\t');
+    TEST_EVAL(tokens.v[4].char_literal == '\\');
 
     arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Character literals - raw byte escapes"))
+  {
+    C_Token_Array tokens = tokenize_c_code(&arena, STR("'\\x01' '\\0' '\\77'"));
+    TEST_EVAL(tokens.count == 3);
+    TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_CHAR);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_CHAR);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_CHAR);
+    TEST_EVAL(string_match(tokens.v[0].raw, STR("'\\x01'")));
+    TEST_EVAL(string_match(tokens.v[1].raw, STR("'\\0'")));
+    TEST_EVAL(string_match(tokens.v[2].raw, STR("'\\77'")));
+    TEST_EVAL(tokens.v[0].char_literal == 1);
+    TEST_EVAL(tokens.v[1].char_literal == 0);
+    TEST_EVAL(tokens.v[2].char_literal == 63);
   }
 
   TEST_BLOCK(STR("Single-line comments"))

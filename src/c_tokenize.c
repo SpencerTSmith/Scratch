@@ -105,6 +105,7 @@ struct C_Token
 
   union
   {
+    String string_literal;
     struct
     {
       u8  base;
@@ -433,6 +434,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     {
       usize end = lexer.at + 1;
 
+      // TODO: Evaluate escapes
       usize escape_count = 0;
       while (c_lexer_in_bounds(lexer, end))
       {
@@ -508,13 +510,13 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
               }
             }
           }
-          else // No escapes, we are good!
+          else // No escapes, just the character
           {
             token.char_literal = c;
             end += 1;
           }
 
-          if (c_lexer_in_bounds(lexer, end) && lexer.source.v[end] == '\'')
+          if (c_lexer_in_bounds(lexer, end) && lexer.source.v[end] == '\'') // Should end with a '
           {
             end += 1;
           }
@@ -591,7 +593,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
       // so check also if we have an integer base 10 so far
       b32 maybe_exponent = token.type == C_TOKEN_LITERAL_DOUBLE || token.int_literal.base == 10;
 
-      if (maybe_exponent  &&
+      if (maybe_exponent &&
           c_lexer_in_bounds(lexer, end) &&
           (lexer.source.v[end] == 'e' || lexer.source.v[end] == 'E'))
       {

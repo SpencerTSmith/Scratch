@@ -125,6 +125,23 @@ struct C_Lexer
   usize  columns_processed;
 };
 
+DEFINE_ARRAY(C_Token);
+DEFINE_CHUNK_LIST(C_Token, 4096);
+
+static
+void c_lexer_push_token(Arena *arena, C_Token_Chunk_List *list, C_Token token)
+{
+  // Check if no chunks or need a new chunk
+  if (!list->last || list->last->count >= STATIC_COUNT(list->last->values))
+  {
+    C_Token_Chunk *new_chunk = arena_new(arena, C_Token_Chunk);
+    list_push_last(list, new_chunk);
+  }
+
+  list->last->values[list->last->count] = token;
+  list->last->count += 1;
+}
+
 // Single character tokens... some special logic required for e.g. =,&,| (could be ==,&&,||)
 // In those cases we check and then grab the 2nd token type of the triple
 // As well for operation assignment tokens (+=, -=, &=, etc.)
@@ -221,8 +238,6 @@ static C_Keyword_Info c_keyword_table[] =
   {STR("signed"),   C_TOKEN_KEYWORD_SIGNED},
 };
 
-DEFINE_ARRAY(C_Token);
-
 static
 b32 c_lexer_in_bounds(C_Lexer lexer, usize at)
 {
@@ -247,6 +262,47 @@ void c_lexer_advance(C_Lexer *lexer, usize count)
 {
   lexer->columns_processed += count;
   lexer->at += count;
+}
+
+// NOTE: Will move at forward if needed, why it takes a pointer to at.
+static
+u8 c_lexer_evaluate_escape(C_Lexer *lexer, usize *peek)
+{
+  u8 result = 0;
+
+  if (c_lexer_in_bounds(*lexer, *peek))
+  {
+    u8 c = lexer->source.v[*peek];
+
+    u8 byte_base = 0;
+    if (c == 'x') // Hex byte escape
+    {
+      byte_base = 16;
+      *peek += 1; // Skip over the x
+    }
+    else if (char_is_digit_base(c, 8)) // Octal byte escape
+    {
+      byte_base = 8;
+    }
+
+    if (byte_base) // We have a raw byte escape sequence, grab them digits
+    {
+      while (c_lexer_in_bounds(*lexer, *peek) &&
+             char_is_digit_base(lexer->source.v[*peek], byte_base))
+      {
+        u8 digit = char_to_digit_base(lexer->source.v[*peek], byte_base);
+        result = (byte_base * result) + digit;
+        *peek += 1;
+      }
+    }
+    else if (c < STATIC_COUNT(c_char_escape_table)) // Just a normal escape
+    {
+      result = c_char_escape_table[c];
+      *peek += 1;
+    }
+  }
+
+  return result;
 }
 
 static
@@ -344,7 +400,7 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
 static
 C_Token_Array tokenize_c_code(Arena *arena, String code)
 {
-  C_Token_Array result = {0};
+  C_Token_Chunk_List chunks = {0};
 
   C_Lexer lexer =
   {
@@ -434,35 +490,41 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     {
       usize end = lexer.at + 1;
 
-      // TODO: Evaluate escapes
-      usize escape_count = 0;
+      b32 valid = true;
+
+      String literal = {0};
+
       while (c_lexer_in_bounds(lexer, end))
       {
         u8 c = lexer.source.v[end];
         end += 1;
 
-        if (c == '"' && escape_count % 2 == 0)
+        if (c == '"')
         {
           break;
         }
         else if (c == '\\') // Escapes
         {
-          escape_count += 1;
+          c = c_lexer_evaluate_escape(&lexer, &end); // Will push end
         }
         else if (c == '\n') // Uh, oh
         {
           // TODO: Other cases should watch out for?
           LOG_ERROR("Encountered string literal without closing quotation mark on same line.");
+          valid = false;
           break;
         }
-        else
-        {
-          escape_count = 0; // We encountered something else, reset escape count
-        }
+
+        array_add(arena, literal, c);
       }
 
-      token.type = C_TOKEN_LITERAL_STRING;
-      token.raw  = string_substring(lexer.source, lexer.at, end);
+      if (valid)
+      {
+        token.type = C_TOKEN_LITERAL_STRING;
+        token.raw  = string_substring(lexer.source, lexer.at, end);
+        token.string_literal = literal;
+        printf("LITERAL :: %.*s\n", STRF(token.string_literal));
+      }
     }
     else if (curr_char == '\'') // Character literal
     {
@@ -667,7 +729,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     usize advance = 1; // We'll just skip ahead if we haven't gotten a real token... maybe not best plan?
     if (token.type != C_TOKEN_NONE)
     {
-      array_add(arena, result, token);
+      c_lexer_push_token(arena, &chunks, token);
       advance = token.raw.count;
     }
     else
@@ -676,6 +738,16 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     }
 
     c_lexer_advance(&lexer, advance);
+  }
+
+  // Put into contiguous array for nice interface in parsing
+  C_Token_Array result = {0};
+  for (C_Token_Chunk *chunk = chunks.first; chunk; chunk = chunk->link_next)
+  {
+    for (usize i = 0; i < chunk->count; i++)
+    {
+      array_add(arena, result, chunk->values[i]);
+    }
   }
 
   return result;

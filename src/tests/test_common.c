@@ -207,19 +207,19 @@ int main(int argc, char **argv)
     i32_Node val2 = {NULL, 17};
     i32_Node val3 = {NULL, 10};
 
-    ptr = list_push_first(list, &val1);
+    ptr = list_push_first(&list, &val1);
     TEST_EVAL(list.first->value == 42);
     TEST_EVAL(list.last->value == 42);
     TEST_EVAL(ptr->value == 42);
     TEST_EVAL(list.count == 1);
 
-    ptr = list_push_first(list, &val2);
+    ptr = list_push_first(&list, &val2);
     TEST_EVAL(list.first->value == 17);
     TEST_EVAL(list.last->value == 42);
     TEST_EVAL(ptr->value == 17);
     TEST_EVAL(list.count == 2);
 
-    ptr = list_push_first(list, &val3);
+    ptr = list_push_first(&list, &val3);
     TEST_EVAL(list.first->value == 10);
     TEST_EVAL(list.last->value == 42);
     TEST_EVAL(ptr->value == 10);
@@ -237,19 +237,19 @@ int main(int argc, char **argv)
     i32_Node val2 = {NULL, 17};
     i32_Node val3 = {NULL, 10};
 
-    ptr = list_push_last(list, &val1);
+    ptr = list_push_last(&list, &val1);
     TEST_EVAL(list.first->value == 42);
     TEST_EVAL(list.last->value == 42);
     TEST_EVAL(ptr->value == 42);
     TEST_EVAL(list.count == 1);
 
-    ptr = list_push_last(list, &val2);
+    ptr = list_push_last(&list, &val2);
     TEST_EVAL(list.first->value == 42);
     TEST_EVAL(list.last->value == 17);
     TEST_EVAL(ptr->value == 17);
     TEST_EVAL(list.count == 2);
 
-    ptr = list_push_last(list, &val3);
+    ptr = list_push_last(&list, &val3);
     TEST_EVAL(list.first->value == 42);
     TEST_EVAL(list.last->value == 10);
     TEST_EVAL(ptr->value == 10);

@@ -57,6 +57,8 @@ typedef ptrdiff_t isize;
 #define true  1
 #define false 0
 
+#define thread_static _Thread_local
+
 #define _CONCAT(a, b) a##b
 #define CONCAT(a, b) _CONCAT(a, b)
 
@@ -219,6 +221,22 @@ DEFINE_LIST(usize);
 DEFINE_LIST(isize);
 
 DEFINE_LIST(String);
+
+#define DEFINE_CHUNK_LIST(Type, Chunk_Size)         \
+typedef struct Type##_Chunk Type##_Chunk;           \
+struct Type##_Chunk                                 \
+{                                                   \
+  Type##_Chunk *link_next;                          \
+  Type         values[Chunk_Size];                  \
+  usize        count;                               \
+};                                                  \
+typedef struct Type##_Chunk_List Type##_Chunk_List; \
+struct Type##_Chunk_List                            \
+{                                                   \
+  Type##_Chunk *first;                              \
+  Type##_Chunk *last;                               \
+  usize count;                                      \
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // LOGGING
@@ -410,9 +428,9 @@ void arena_clear(Arena *arena);
 // Helpers specific to the DEFINE_LIST() structures, that is, they assume the naming
 // scheme and also increment the count
 #define list_push_first(list, new_node) \
-  ((list).count++, SLL_push_first((list).first, (list).last, new_node, link_next))
+  ((list)->count++, SLL_push_first((list)->first, (list)->last, new_node, link_next))
 #define list_push_last(list, new_node) \
-  ((list).count++, SLL_push_last((list).first, (list).last, new_node, link_next))
+  ((list)->count++, SLL_push_last((list)->first, (list)->last, new_node, link_next))
 
 // We just want some temporary memory
 // ie we save the offset we wish to return to after using this arena as a scratch pad

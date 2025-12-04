@@ -300,7 +300,7 @@ int main(int argc, char **argv)
   TEST_BLOCK(STR("String literals"))
   {
     C_Token_Array tokens = tokenize_c_code(&arena, STR("\"hello\" \"world\" \"test\\nstring\""
-                                                       "\"hello\\x1\" \"quote\\\"\""));
+                                                       "\"hello\\x10\" \"quote\\\"\""));
     TEST_EVAL(tokens.count == 5);
     TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_STRING);
     TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_STRING);
@@ -310,12 +310,12 @@ int main(int argc, char **argv)
     TEST_EVAL(string_match(tokens.v[0].raw, STR("\"hello\"")));
     TEST_EVAL(string_match(tokens.v[1].raw, STR("\"world\"")));
     TEST_EVAL(string_match(tokens.v[2].raw, STR("\"test\\nstring\"")));
-    TEST_EVAL(string_match(tokens.v[3].raw, STR("\"hello\\x1\"")));
+    TEST_EVAL(string_match(tokens.v[3].raw, STR("\"hello\\x10\"")));
     TEST_EVAL(string_match(tokens.v[4].raw, STR("\"quote\\\"\"")));
     TEST_EVAL(string_match(tokens.v[0].string_literal, STR("hello")));
     TEST_EVAL(string_match(tokens.v[1].string_literal, STR("world")));
     TEST_EVAL(string_match(tokens.v[2].string_literal, STR("test\nstring")));
-    TEST_EVAL(string_match(tokens.v[3].string_literal, STR("hello\x1")));
+    TEST_EVAL(string_match(tokens.v[3].string_literal, STR("hello\x10")));
     TEST_EVAL(string_match(tokens.v[4].string_literal, STR("quote\"")));
 
     arena_clear(&arena);

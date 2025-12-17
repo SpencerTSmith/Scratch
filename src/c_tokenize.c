@@ -452,6 +452,8 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     }
     else if (char_is_alphabetic(curr_char) || curr_char == '_') // Identifier or keyword
     {
+      token.type = C_TOKEN_IDENTIFIER; // By default an identifier
+
       usize end = lexer.at + 1;
 
       while (c_lexer_in_bounds(lexer, end))
@@ -479,18 +481,12 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           token.type = c_keyword_table[keyword_idx].type;
         }
       }
-
-      // Not a keyword, must be an identifier
-      if (token.type == C_TOKEN_NONE)
-      {
-        token.type = C_TOKEN_IDENTIFIER;
-      }
     }
     else if (curr_char == '"') // String literal
     {
-      usize end = lexer.at + 1;
+      token.type = C_TOKEN_LITERAL_STRING;
 
-      b32 valid = true;
+      usize end = lexer.at + 1;
 
       String literal = {0};
 
@@ -509,22 +505,16 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         }
         else if (c == '\n') // Uh, oh
         {
-          // TODO: Other cases should watch out for?
+          token.type = C_TOKEN_NONE;
           LOG_ERROR("Encountered string literal without closing quotation mark on same line.");
-          valid = false;
           break;
         }
 
         array_add(arena, literal, c);
       }
 
-      if (valid)
-      {
-        token.type = C_TOKEN_LITERAL_STRING;
-        token.raw  = string_substring(lexer.source, lexer.at, end);
-        token.string_literal = literal;
-        printf("LITERAL :: %.*s\n", STRF(token.string_literal));
-      }
+      token.string_literal = literal;
+      token.raw = string_substring(lexer.source, lexer.at, end);
     }
     else if (curr_char == '\'') // Character literal
     {
@@ -584,8 +574,8 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           }
           else
           {
-            // TODO: Handle gracefully, try to find a ' to end this token?
-            LOG_ERROR("Encountered incorrectly terminated character literal.");
+            token.type = C_TOKEN_NONE;
+            LOG_ERROR("Encountered unterminated character literal.");
           }
 
           token.type = C_TOKEN_LITERAL_CHAR;
@@ -605,7 +595,6 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
       usize end = lexer.at;
 
-      // TODO: Make sure that there is at least one more digit following a base signifier (e.g. 0x1 valid but 0x not valid)
       if (curr_char == '0' && c_lexer_in_bounds(lexer, end + 1))
       {
         u8 c = lexer.source.v[end + 1];
@@ -621,12 +610,25 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         }
       }
 
+      b32 had_digit = false;
+
       while (c_lexer_in_bounds(lexer, end) && char_is_digit_base(lexer.source.v[end], token.int_literal.base))
       {
         u64 digit = char_to_digit_base(lexer.source.v[end], token.int_literal.base);
         u64 base  = token.int_literal.base;
         token.int_literal.v = base * token.int_literal.v + digit;
         end += 1;
+
+        had_digit = true;
+      }
+
+      // Different base literals must have a digit following the base signifier,
+      // e.g. 0x1 valid but 0x not valid
+      if (!had_digit && token.int_literal.base != 10)
+      {
+        token.type = C_TOKEN_NONE;
+        String base_string = token.int_literal.base == 2 ? STR("Hexadecimal") : STR("Binary");
+        LOG_ERROR("%.*s integer literals must include a digit following the x", STRF(base_string));
       }
 
       // Collect decimals if present and haven't changed base
@@ -649,8 +651,6 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         }
       }
 
-      // TODO: Gracefully handle when we have an E but no digits afterwards, should not produce a float but reverse literal
-
       // A floating point literal can have an Exponent part without also having a decimal,
       // so check also if we have an integer base 10 so far
       b32 maybe_exponent = token.type == C_TOKEN_LITERAL_DOUBLE || token.int_literal.base == 10;
@@ -659,6 +659,12 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           c_lexer_in_bounds(lexer, end) &&
           (lexer.source.v[end] == 'e' || lexer.source.v[end] == 'E'))
       {
+        // If we haven't gotten a decimal yet, we need to do conversion to float here
+        if (token.type == C_TOKEN_LITERAL_INT)
+        {
+          token.float_literal = (f64)token.int_literal.v;
+        }
+
         token.type = C_TOKEN_LITERAL_DOUBLE;
         end += 1;
 
@@ -669,20 +675,32 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           end += 1;
         }
 
+        b32 valid_exponent = false; // Needs to have a digit after E
+
         f64 exponent = 0.0;
         while (c_lexer_in_bounds(lexer, end) && char_is_digit(lexer.source.v[end]))
         {
           u64 digit = char_to_digit(lexer.source.v[end]);
           exponent = 10 * exponent + digit;
           end += 1;
+
+          valid_exponent = true;
         }
 
-        token.float_literal *= pow(10.0, sign * exponent);
+        if (valid_exponent)
+        {
+          token.float_literal *= pow(10.0, sign * exponent);
+        }
+        else
+        {
+          token.type = C_TOKEN_NONE; // Hmm should we discard this token?
+          LOG_ERROR("Float literal with exponent must include digits following the E");
+        }
       }
 
       // TODO: Apparently there are long doubles?
 
-      if (c_lexer_in_bounds(lexer, end)) // Chech for f, ul, ll, LL, etc
+      if (token.type != C_TOKEN_NONE && c_lexer_in_bounds(lexer, end)) // Chech for f, ul, ll, LL, etc
       {
         u8 c = lexer.source.v[end];
         if (token.type == C_TOKEN_LITERAL_DOUBLE && (c == 'f' || c == 'F'))
@@ -726,11 +744,10 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
       token.raw = string_substring(lexer.source, lexer.at, end);
     }
 
-    usize advance = 1; // We'll just skip ahead if we haven't gotten a real token... maybe not best plan?
+    usize advance = MAX(1, token.raw.count); // Always advance by at least 1
     if (token.type != C_TOKEN_NONE)
     {
       c_lexer_push_token(arena, &chunks, token);
-      advance = token.raw.count;
     }
     else
     {

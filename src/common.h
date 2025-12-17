@@ -409,7 +409,7 @@ void arena_clear(Arena *arena);
      (array).v + (array).count - 1)                                                              \
   : arena_alloc((a), sizeof((array).v[0]), alignof((array).v[0])) == (array).v + (array).count ? \
     ((array).v[(array).count++] = (new), (array).v + (array).count - 1)                          \
-  : (LOG_ERROR("Tried to add to array in arena noncontiguously!"), arena_pop(a, sizeof((array).v[0])), NULL)
+  : (LOG_ERROR("Tried to add to array in arena noncontiguously!"), arena_pop(a, sizeof((array).v[0])), (void *)0)
 
 // Linked list Helpers ---
 

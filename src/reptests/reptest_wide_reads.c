@@ -22,10 +22,10 @@ extern void read256_asm(u64 count, u64 *data);
 
 Assembly_Entry test_entries[] =
 {
-  {str("read32_asm"), read32_asm},
-  {str("read64_asm"), read64_asm},
-  {str("read128_asm"), read128_asm},
-  {str("read256_asm"), read256_asm},
+  {STR("read32_asm"), read32_asm},
+  {STR("read64_asm"), read64_asm},
+  {STR("read128_asm"), read128_asm},
+  {STR("read256_asm"), read256_asm},
 };
 
 int main(int arg_count, char **args)

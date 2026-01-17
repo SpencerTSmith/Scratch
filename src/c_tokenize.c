@@ -55,6 +55,7 @@
   X(C_TOKEN_LITERAL_UNSIGNED_LONG_LONG) \
   X(C_TOKEN_LITERAL_FLOAT)              \
   X(C_TOKEN_LITERAL_DOUBLE)             \
+  X(C_TOKEN_LITERAL_LONG_DOUBLE)        \
   X(C_TOKEN_KEYWORD_FOR)                \
   X(C_TOKEN_KEYWORD_WHILE)              \
   X(C_TOKEN_KEYWORD_DO)                 \
@@ -698,45 +699,56 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         }
       }
 
-      // TODO: Apparently there are long doubles?
 
       if (token.type != C_TOKEN_NONE && c_lexer_in_bounds(lexer, end)) // Chech for f, ul, ll, LL, etc
       {
         u8 c = lexer.source.v[end];
-        if (token.type == C_TOKEN_LITERAL_DOUBLE && (c == 'f' || c == 'F'))
+        if (token.type == C_TOKEN_LITERAL_DOUBLE)
         {
-          token.type = C_TOKEN_LITERAL_FLOAT;
-          end += 1;
-        }
-        else if (token.type == C_TOKEN_LITERAL_INT && (c == 'u' || c == 'U'))
-        {
-          token.type = C_TOKEN_LITERAL_UNSIGNED_INT;
-          end += 1;
-
-          if (c_lexer_in_bounds(lexer, end) &&
-              (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
+          if (c == 'f' || c == 'F')
           {
-            token.type = C_TOKEN_LITERAL_UNSIGNED_LONG;
+            token.type = C_TOKEN_LITERAL_FLOAT;
+            end += 1;
+          }
+          // NOTE: Apparently there are long doubles? Not going to bother with with actually trying to grab the full 80 (128?) bits
+          else if (c == 'l' || c == 'L')
+          {
+            token.type = C_TOKEN_LITERAL_LONG_DOUBLE;
+            end += 1;
+          }
+        }
+        else if (token.type == C_TOKEN_LITERAL_INT)
+        {
+          if (c == 'u' || c == 'U')
+          {
+            token.type = C_TOKEN_LITERAL_UNSIGNED_INT;
             end += 1;
 
             if (c_lexer_in_bounds(lexer, end) &&
                 (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
             {
-              token.type = C_TOKEN_LITERAL_UNSIGNED_LONG_LONG;
+              token.type = C_TOKEN_LITERAL_UNSIGNED_LONG;
               end += 1;
+
+              if (c_lexer_in_bounds(lexer, end) &&
+                  (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
+              {
+                token.type = C_TOKEN_LITERAL_UNSIGNED_LONG_LONG;
+                end += 1;
+              }
             }
           }
-        }
-        else if (token.type == C_TOKEN_LITERAL_INT && (c == 'l' || c == 'L'))
-        {
-          token.type = C_TOKEN_LITERAL_LONG;
-          end += 1;
-
-          if (c_lexer_in_bounds(lexer, end) &&
-              (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
+          else if (c == 'l' || c == 'L')
           {
+            token.type = C_TOKEN_LITERAL_LONG;
+            end += 1;
+
+            if (c_lexer_in_bounds(lexer, end) &&
+                (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
+            {
               token.type = C_TOKEN_LITERAL_LONG_LONG;
               end += 1;
+            }
           }
         }
       }

@@ -256,11 +256,11 @@ int main(int argc, char **argv)
     C_Token_Array tokens = tokenize_c_code(&arena, STR("42 123u 456L 789LL 999uL 111uLL"));
     TEST_EVAL(tokens.count == 6);
     TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_INT);
-    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_UNSIGNED_INT);
-    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_LONG);
-    TEST_EVAL(tokens.v[3].type == C_TOKEN_LITERAL_LONG_LONG);
-    TEST_EVAL(tokens.v[4].type == C_TOKEN_LITERAL_UNSIGNED_LONG);
-    TEST_EVAL(tokens.v[5].type == C_TOKEN_LITERAL_UNSIGNED_LONG_LONG);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[3].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[4].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_LITERAL_INT);
     TEST_EVAL(string_match(tokens.v[0].raw, STR("42")));
     TEST_EVAL(string_match(tokens.v[1].raw, STR("123u")));
     TEST_EVAL(string_match(tokens.v[2].raw, STR("456L")));
@@ -273,6 +273,13 @@ int main(int argc, char **argv)
     TEST_EVAL(tokens.v[3].int_literal.v == 789);
     TEST_EVAL(tokens.v[4].int_literal.v == 999);
     TEST_EVAL(tokens.v[5].int_literal.v == 111);
+    TEST_EVAL((tokens.v[0].flags & (C_TOKEN_FLAG_LITERAL_UNSIGNED|C_TOKEN_FLAG_LITERAL_LONG|C_TOKEN_FLAG_LITERAL_2ND_LONG)) == 0);
+    TEST_EVAL((tokens.v[1].flags & C_TOKEN_FLAG_LITERAL_UNSIGNED));
+    TEST_EVAL((tokens.v[2].flags & C_TOKEN_FLAG_LITERAL_LONG));
+    TEST_EVAL((tokens.v[3].flags & C_TOKEN_FLAG_LITERAL_2ND_LONG));
+    TEST_EVAL((tokens.v[3].flags & (C_TOKEN_FLAG_LITERAL_LONG|C_TOKEN_FLAG_LITERAL_2ND_LONG)));
+    TEST_EVAL((tokens.v[4].flags & (C_TOKEN_FLAG_LITERAL_LONG|C_TOKEN_FLAG_LITERAL_UNSIGNED)));
+    TEST_EVAL((tokens.v[5].flags & (C_TOKEN_FLAG_LITERAL_LONG|C_TOKEN_FLAG_LITERAL_2ND_LONG|C_TOKEN_FLAG_LITERAL_UNSIGNED)));
 
     arena_clear(&arena);
   }
@@ -282,11 +289,11 @@ int main(int argc, char **argv)
     C_Token_Array tokens = tokenize_c_code(&arena, STR("3.14 2.5f 1.0e10 7.0e 6.022E-23 8e1 4.0L"));
     TEST_EVAL(tokens.count == 6);
     TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_DOUBLE);
-    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_FLOAT);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_DOUBLE);
     TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_DOUBLE);
     TEST_EVAL(tokens.v[3].type == C_TOKEN_LITERAL_DOUBLE);
     TEST_EVAL(tokens.v[4].type == C_TOKEN_LITERAL_DOUBLE);
-    TEST_EVAL(tokens.v[5].type == C_TOKEN_LITERAL_LONG_DOUBLE);
+    TEST_EVAL(tokens.v[5].type == C_TOKEN_LITERAL_DOUBLE);
     TEST_EVAL(string_match(tokens.v[0].raw, STR("3.14")));
     TEST_EVAL(string_match(tokens.v[1].raw, STR("2.5f")));
     TEST_EVAL(string_match(tokens.v[2].raw, STR("1.0e10")));
@@ -299,6 +306,8 @@ int main(int argc, char **argv)
     TEST_EVAL(EPSILON_EQUAL(tokens.v[3].float_literal, (6.022 * pow(10, -23))));
     TEST_EVAL(EPSILON_EQUAL(tokens.v[4].float_literal, (8 * pow(10, 1))));
     TEST_EVAL(EPSILON_EQUAL(tokens.v[5].float_literal, 4.0));
+    TEST_EVAL((tokens.v[1].flags & C_TOKEN_FLAG_LITERAL_FLOAT));
+    TEST_EVAL((tokens.v[5].flags & C_TOKEN_FLAG_LITERAL_LONG));
 
     arena_clear(&arena);
   }
@@ -517,8 +526,8 @@ int main(int argc, char **argv)
     C_Token_Array tokens = tokenize_c_code(&arena, STR("0x42 0b 0x 0x12L 0b11u 0b10 0xFA"));
     TEST_EVAL(tokens.count == 5);
     TEST_EVAL(tokens.v[0].type == C_TOKEN_LITERAL_INT);
-    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_LONG);
-    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_UNSIGNED_INT);
+    TEST_EVAL(tokens.v[1].type == C_TOKEN_LITERAL_INT);
+    TEST_EVAL(tokens.v[2].type == C_TOKEN_LITERAL_INT);
     TEST_EVAL(tokens.v[3].type == C_TOKEN_LITERAL_INT);
     TEST_EVAL(tokens.v[4].type == C_TOKEN_LITERAL_INT);
     TEST_EVAL(tokens.v[0].int_literal.base == 16);

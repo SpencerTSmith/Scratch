@@ -1,7 +1,5 @@
 #include "common.h"
 
-// TODO: Evaluate literals, escapes, etc.
-
 #define C_Token_Type(X)                 \
   X(C_TOKEN_NONE)                       \
   X(C_TOKEN_BEGIN_PARENTHESIS)          \
@@ -48,14 +46,7 @@
   X(C_TOKEN_LITERAL_STRING)             \
   X(C_TOKEN_LITERAL_CHAR)               \
   X(C_TOKEN_LITERAL_INT)                \
-  X(C_TOKEN_LITERAL_UNSIGNED_INT)       \
-  X(C_TOKEN_LITERAL_LONG)               \
-  X(C_TOKEN_LITERAL_LONG_LONG)          \
-  X(C_TOKEN_LITERAL_UNSIGNED_LONG)      \
-  X(C_TOKEN_LITERAL_UNSIGNED_LONG_LONG) \
-  X(C_TOKEN_LITERAL_FLOAT)              \
   X(C_TOKEN_LITERAL_DOUBLE)             \
-  X(C_TOKEN_LITERAL_LONG_DOUBLE)        \
   X(C_TOKEN_KEYWORD_FOR)                \
   X(C_TOKEN_KEYWORD_WHILE)              \
   X(C_TOKEN_KEYWORD_DO)                 \
@@ -95,10 +86,20 @@
 
 ENUM_TABLE(C_Token_Type);
 
+// This instead?
+typedef enum C_Token_Flags
+{
+  C_TOKEN_FLAG_LITERAL_UNSIGNED  = 1 << 0,
+  C_TOKEN_FLAG_LITERAL_LONG      = 1 << 1,
+  C_TOKEN_FLAG_LITERAL_2ND_LONG = 1 << 2,
+  C_TOKEN_FLAG_LITERAL_FLOAT     = 1 << 3,
+} C_Token_Flags;
+
 typedef struct C_Token C_Token;
 struct C_Token
 {
-  C_Token_Type type;
+  C_Token_Type  type;
+  C_Token_Flags flags;
 
   String raw;
   usize  line;
@@ -127,7 +128,7 @@ struct C_Lexer
 };
 
 DEFINE_ARRAY(C_Token);
-DEFINE_CHUNK_LIST(C_Token, 4096);
+DEFINE_CHUNK_LIST(C_Token, 2048);
 
 static
 void c_lexer_push_token(Arena *arena, C_Token_Chunk_List *list, C_Token token)
@@ -243,6 +244,19 @@ static
 b32 c_lexer_in_bounds(C_Lexer lexer, usize at)
 {
   return at < lexer.source.count;
+}
+
+// Returns 0 if not in bounds
+u8 c_lexer_peek_at(C_Lexer lexer, usize at)
+{
+  u8 result = 0;
+
+  if (c_lexer_in_bounds(lexer, at))
+  {
+    result = lexer.source.v[at];
+  }
+
+  return result;
 }
 
 static
@@ -699,7 +713,6 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         }
       }
 
-
       if (token.type != C_TOKEN_NONE && c_lexer_in_bounds(lexer, end)) // Chech for f, ul, ll, LL, etc
       {
         u8 c = lexer.source.v[end];
@@ -707,13 +720,13 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         {
           if (c == 'f' || c == 'F')
           {
-            token.type = C_TOKEN_LITERAL_FLOAT;
+            token.flags |= C_TOKEN_FLAG_LITERAL_FLOAT; // Float literal
             end += 1;
           }
           // NOTE: Apparently there are long doubles? Not going to bother with with actually trying to grab the full 80 (128?) bits
           else if (c == 'l' || c == 'L')
           {
-            token.type = C_TOKEN_LITERAL_LONG_DOUBLE;
+            token.flags |= C_TOKEN_FLAG_LITERAL_LONG;
             end += 1;
           }
         }
@@ -721,32 +734,26 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         {
           if (c == 'u' || c == 'U')
           {
-            token.type = C_TOKEN_LITERAL_UNSIGNED_INT;
+            token.flags |= C_TOKEN_FLAG_LITERAL_UNSIGNED;
             end += 1;
-
-            if (c_lexer_in_bounds(lexer, end) &&
-                (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
-            {
-              token.type = C_TOKEN_LITERAL_UNSIGNED_LONG;
-              end += 1;
-
-              if (c_lexer_in_bounds(lexer, end) &&
-                  (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
-              {
-                token.type = C_TOKEN_LITERAL_UNSIGNED_LONG_LONG;
-                end += 1;
-              }
-            }
+            LOG_INFO("Here: %lu", token.flags);
           }
-          else if (c == 'l' || c == 'L')
+
+          // TODO: I actually quite like this... make usage code less branchy, replace most cases of c_lexer_in_bounds() with this
+          u8 peek = c_lexer_peek_at(lexer, end);
+
+          // Check for long modifier... need to again check
+          if (peek == 'l' || peek == 'L')
           {
-            token.type = C_TOKEN_LITERAL_LONG;
+            token.flags |= C_TOKEN_FLAG_LITERAL_LONG;
             end += 1;
 
-            if (c_lexer_in_bounds(lexer, end) &&
-                (lexer.source.v[end] == 'l' || lexer.source.v[end] == 'L'))
+            peek = c_lexer_peek_at(lexer, end);
+
+            // TODO: Inelegant
+            if (peek == 'l' || peek == 'L')
             {
-              token.type = C_TOKEN_LITERAL_LONG_LONG;
+              token.flags |= C_TOKEN_FLAG_LITERAL_2ND_LONG;
               end += 1;
             }
           }

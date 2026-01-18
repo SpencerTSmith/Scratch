@@ -49,14 +49,7 @@
   X(C_TOKEN_LITERAL_STRING)             \
   X(C_TOKEN_LITERAL_CHAR)               \
   X(C_TOKEN_LITERAL_INT)                \
-  X(C_TOKEN_LITERAL_UNSIGNED_INT)       \
-  X(C_TOKEN_LITERAL_LONG)               \
-  X(C_TOKEN_LITERAL_LONG_LONG)          \
-  X(C_TOKEN_LITERAL_UNSIGNED_LONG)      \
-  X(C_TOKEN_LITERAL_UNSIGNED_LONG_LONG) \
-  X(C_TOKEN_LITERAL_FLOAT)              \
   X(C_TOKEN_LITERAL_DOUBLE)             \
-  X(C_TOKEN_LITERAL_LONG_DOUBLE)        \
   X(C_TOKEN_KEYWORD_FOR)                \
   X(C_TOKEN_KEYWORD_WHILE)              \
   X(C_TOKEN_KEYWORD_DO)                 \
@@ -96,10 +89,19 @@
 
 ENUM_TABLE(C_Token_Type);
 
+typedef enum C_Token_Flags
+{
+  C_TOKEN_FLAG_LITERAL_UNSIGNED  = 1 << 0,
+  C_TOKEN_FLAG_LITERAL_LONG      = 1 << 1,
+  C_TOKEN_FLAG_LITERAL_2ND_LONG = 1 << 2,
+  C_TOKEN_FLAG_LITERAL_FLOAT     = 1 << 3,
+} C_Token_Flags;
+
 typedef struct C_Token C_Token;
 struct C_Token
 {
-  C_Token_Type type;
+  C_Token_Type  type;
+  C_Token_Flags flags;
 
   String raw;
   usize  line;

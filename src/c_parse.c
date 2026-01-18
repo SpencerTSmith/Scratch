@@ -24,6 +24,7 @@ struct C_Node
   C_Node *parent;
 
   C_Node *first_child;
+  C_Node *last_child;
   usize  child_count;
 
   C_Node *next_sibling;
@@ -57,14 +58,22 @@ b32 c_token_is_literal(C_Token *token)
 {
   C_Token_Type t = token->type;
 
-  b32 result = token->type == C_TOKEN_LITERAL_CHAR       ||
-               token->type == C_TOKEN_LITERAL_INT        ||
-               token->type == C_TOKEN_LITERAL_LONG       ||
-               token->type == C_TOKEN_LITERAL_LONG_LONG  ||
-               token->type == C_TOKEN_LITERAL_UNSIGNED_LONG_LONG  ||
-               token->type == C_TOKEN_LITERAL_FLOAT ||
+  b32 result = token->type == C_TOKEN_LITERAL_CHAR   ||
+               token->type == C_TOKEN_LITERAL_INT    ||
                token->type == C_TOKEN_LITERAL_DOUBLE ||
                token->type == C_TOKEN_LITERAL_STRING;
+
+  return result;
+}
+
+C_Token c_parse_peek_token(C_Parser parser, usize offset)
+{
+  C_Token result = {0};
+
+  if (parser.at + offset < parser.tokens.count)
+  {
+    result = parser.tokens.v[parser.at + offset];
+  }
 
   return result;
 }
@@ -83,12 +92,9 @@ C_Node *parse_c_tokens(Arena *arena, C_Token_Array tokens)
   C_Node *curr_parent = root;
   for (usize token_idx = 0; token_idx < tokens.count;)
   {
-    // Saw this somewhere... think it makes good sense for lookaheads
-    C_Token token_0 = tokens.v[token_idx];
-    C_Token token_1 = token_idx + 1 < tokens.count ? tokens.v[token_idx + 1] : (C_Token) {0};
-    C_Token token_2 = token_idx + 2 < tokens.count ? tokens.v[token_idx + 2] : (C_Token) {0};
+    C_Token token = tokens.v[token_idx];
 
-    if (c_token_is_type_keyword(&token_0))
+    if (c_token_is_type_keyword(&token))
     {
       C_Node type_node = {0};
       C_Node name_node = {0};

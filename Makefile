@@ -45,6 +45,10 @@ test-c-tokenize: bin-folder
 	gcc ${TEST_FLAGS} src/tests/test_c_tokenize.c -o bin/test_c_tokenize.x
 	bin/test_c_tokenize.x
 
+test-c-parse: bin-folder
+	gcc ${TEST_FLAGS} src/tests/test_c_parse.c -o bin/test_c_parse.x
+	bin/test_c_parse.x
+
 test-linear-algebra: bin-folder
 	gcc ${TEST_FLAGS} src/tests/test_linear_algebra.c -o bin/test_linear_algebra.x
 	bin/test_linear_algebra.x

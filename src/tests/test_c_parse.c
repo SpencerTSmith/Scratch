@@ -7,18 +7,23 @@
 #include "../c_tokenize.c"
 #include "../c_parse.c"
 
-void print_c_ast(C_Node *node, usize depth)
+void print_c_ast(C_Leaf *leaf, usize depth)
 {
-  if (node)
+  if (leaf)
   {
     for (usize i = 0; i < depth; i++)
     {
       printf(" ");
     }
 
-    printf("%s\n", C_Node_Type_strings[node->type]);
+    printf("%s\n", C_Leaf_Type_strings[leaf->type]);
 
-    for (C_Node *cursor = node->first_child; cursor; cursor = cursor->next_sibling)
+    // if (leaf->type == C_LEAF_TYPE)
+    // {
+    //   printf("%.*s\n", leaf->);
+    // }
+
+    for (C_Leaf *cursor = leaf->first_child; cursor; cursor = cursor->next_sibling)
     {
       print_c_ast(cursor, depth + 1);
     }
@@ -32,17 +37,19 @@ int main(int argc, char **argv)
     String sample_program =
       STR(
         "int foo;"
+        "float boo;"
+        "int bar = 1;"
       );
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);
-    for EACH_INDEX(token_idx, tokens.count)
-    {
-      C_Token token = tokens.v[token_idx];
-      printf("Token %lu: %s [ %.*s ]\n",
-             token_idx, C_Token_Type_strings[token.type], STRF(token.raw));
-    }
+    // for EACH_INDEX(token_idx, tokens.count)
+    // {
+    //   C_Token token = tokens.v[token_idx];
+    //   printf("Token %lu: %s [ %.*s ]\n",
+    //          token_idx, C_Token_Type_strings[token.type], STRF(token.raw));
+    // }
 
-    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Leaf *root = parse_c_tokens(&arena, tokens);
     print_c_ast(root, 0);
 
     arena_clear(&arena);

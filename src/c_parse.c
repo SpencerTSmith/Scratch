@@ -204,13 +204,14 @@ C_Leaf *c_parse_expression_factor(Arena *arena, C_Parser *parser, C_Leaf *parent
 C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
 {
   // We don't know the parent yet...
+  // TODO: Actually think these 2 functions parse_expresssion_factor and parse_expression can become one
   C_Leaf *left = c_parse_expression_factor(arena, parser, 0);
 
   C_Leaf *result = left; // Return just the left if we don't meet later checks
 
   // TODO: Maybe move this check to parse factor and return a nil leaf if no further operators
-  C_Token potential_binop = c_parse_peek_token(*parser, 0);
-  if (c_token_is_binary_operator(potential_binop))
+  C_Token peek = c_parse_peek_token(*parser, 0);
+  if (c_token_is_binary_operator(peek))
   {
     result = arena_new(arena, C_Leaf);
     result->type = C_LEAF_BINARY;
@@ -221,6 +222,10 @@ C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
     c_leaf_add_child(result, left);
 
     C_Leaf *right = c_parse_expression(arena, parser, result);
+  }
+  // catch post increment, decrement here
+  else if (c_token_is_unary_operator(peek))
+  {
 
   }
 

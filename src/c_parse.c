@@ -14,6 +14,7 @@
   X(C_LEAF_DECLARATION)     \
   X(C_LEAF_UNARY)           \
   X(C_LEAF_BINARY)          \
+  X(C_LEAF_PARENTHETICAL)   \
   X(C_LEAF_COUNT)
 
 ENUM_TABLE(C_Leaf_Type);
@@ -32,7 +33,14 @@ struct C_Leaf
   C_Leaf *next_sibling;
   C_Leaf *prev_sibling;
 
-  String name;
+  union
+  {
+    String variable_name;
+    struct
+    {
+
+    };
+  };
 };
 
 typedef struct C_Parser C_Parser;
@@ -150,7 +158,7 @@ C_Token c_parse_peek_token(C_Parser parser, isize offset)
 {
   C_Token result = {0};
 
-  if (parser.at + offset < parser.tokens.count && parser.at + offset >= 0)
+  if (parser.at + offset < parser.tokens.count && ((isize)parser.at + offset) >= 0)
   {
     result = parser.tokens.v[parser.at + offset];
   }
@@ -175,11 +183,14 @@ b32 c_parse_incomplete(C_Parser parser)
   return parser.at < parser.tokens.count;
 }
 
-C_Leaf *c_parse_expression_factor(Arena *arena, C_Parser *parser, C_Leaf *parent)
+C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent);
+
+C_Leaf *c_parse_expression_left(Arena *arena, C_Parser *parser, C_Leaf *parent)
 {
-  C_Leaf *result = arena_new(arena, C_Leaf);
 
   C_Token token = c_parse_peek_token(*parser, 0);
+
+  C_Leaf *result = arena_new(arena, C_Leaf);
 
   if (c_token_is_literal(token))
   {
@@ -191,13 +202,34 @@ C_Leaf *c_parse_expression_factor(Arena *arena, C_Parser *parser, C_Leaf *parent
     result->type = C_LEAF_UNARY;
     parser->at += 1;
 
-    // Grab child
-    C_Leaf *unary_child = c_parse_expression_factor(arena, parser, result);
+    // HACK: ugly... simpler way?
+    C_Leaf *unary_child = c_parse_peek_token(*parser, 0).type != C_TOKEN_BEGIN_PARENTHESIS ?
+                          c_parse_expression_left(arena, parser, result) :
+                          c_parse_expression(arena, parser, result);
   }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {
-    result->type = C_LEAF_VARIABLE;
+    C_Token peek = c_parse_peek_token(*parser, 0);
+
+    if (peek.type != C_TOKEN_BEGIN_PARENTHESIS)
+    {
+      result->type = C_LEAF_VARIABLE;
+      parser->at += 1;
+    }
+    else
+    {
+      // TODO: Function call
+    }
+  }
+  else if (token.type == C_TOKEN_BEGIN_PARENTHESIS)
+  {
+    // New parenthetical group
+    result = arena_new(arena, C_Leaf);
+    result->type = C_LEAF_PARENTHETICAL;
+
     parser->at += 1;
+
+    C_Leaf *inner = c_parse_expression(arena, parser, result);
   }
 
   c_leaf_add_child(parent, result);
@@ -209,7 +241,9 @@ C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
 {
   // We don't know the parent yet...
   // TODO: Actually think these 2 functions parse_expresssion_factor and parse_expression can become one
-  C_Leaf *left = c_parse_expression_factor(arena, parser, 0);
+  //
+  // TODO: If expression begins with parenthesis we allocate a new empty node for no reason in this call... fix
+  C_Leaf *left = c_parse_expression_left(arena, parser, 0);
 
   C_Leaf *result = left; // Return just the left if we don't meet later checks
 
@@ -238,6 +272,11 @@ C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
     // Hmm, should the post increment/decrement be a child of the expression... probably
     c_leaf_add_child(result, unary_op);
   }
+  else if (peek.type == C_TOKEN_CLOSE_PARENTHESIS)
+  {
+    // just skip this and return
+    parser->at += 1;
+  }
 
   c_leaf_add_child(parent, result);
 
@@ -253,7 +292,7 @@ C_Leaf *c_parse_type(Arena *arena, C_Parser *parser, C_Leaf *parent)
   if (c_token_is_type_keyword(token))
   {
     result->type = C_LEAF_TYPE;
-    result->name = token.raw; // Hehehe, nice to just do this
+    result->variable_name = token.raw; // Hehehe, nice to just do this
 
     c_leaf_add_child(parent, result);
   }
@@ -277,7 +316,8 @@ C_Leaf *c_parse_variable(Arena *arena, C_Parser *parser, C_Leaf *parent)
   if (token.type == C_TOKEN_IDENTIFIER)
   {
     result->type = C_LEAF_VARIABLE;
-    result->name = token.raw;
+    result->variable_name = token.raw;
+
     // TODO: probably need to do other stuff?
     c_leaf_add_child(parent, result);
   }

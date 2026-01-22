@@ -1,7 +1,7 @@
 SHELL := bash
 
 ON_WARNINGS := -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-align -Wredundant-decls
-NO_WARNINGS := -Wno-unused-parameter -Wno-unused-function -Wno-override-init
+NO_WARNINGS := -Wno-unused-variable -Wno-unused-parameter -Wno-unused-function -Wno-override-init
 
 OPTIMIZATION := -O2
 

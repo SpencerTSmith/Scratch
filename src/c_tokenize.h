@@ -91,10 +91,10 @@ ENUM_TABLE(C_Token_Type);
 
 typedef enum C_Token_Flags
 {
-  C_TOKEN_FLAG_LITERAL_UNSIGNED  = 1 << 0,
-  C_TOKEN_FLAG_LITERAL_LONG      = 1 << 1,
+  C_TOKEN_FLAG_LITERAL_UNSIGNED = 1 << 0,
+  C_TOKEN_FLAG_LITERAL_LONG     = 1 << 1,
   C_TOKEN_FLAG_LITERAL_2ND_LONG = 1 << 2,
-  C_TOKEN_FLAG_LITERAL_FLOAT     = 1 << 3,
+  C_TOKEN_FLAG_LITERAL_FLOAT    = 1 << 3,
 } C_Token_Flags;
 
 typedef struct C_Token C_Token;

@@ -50,19 +50,22 @@ int main(int argc, char **argv)
   {
     String sample_program =
       STR(
-        "int foo;\n"
-        "float boo;\n"
-        "int bar = 1;\n"
-        "int baz = -1;\n"
-        "int baz = -1 + 1;\n"
-        "int boo = 1 + 3 + 1;\n"
-        "int ban = bar++;"
+        // "int foo;\n"
+        // "float boo;\n"
+        // "int bar = 1;\n"
+        // "int baz = -1;\n"
+        // "int baz = -1 + 1;\n"
+        "int baz = -(1 + 1);\n"
+        // "int boo = 1 + 3 + 1;\n"
+        // "int ban = bar++;\n"
+        // "int ban = bar--;\n"
+        // "int par = 1 + (1 + 1) + (1 + 1);\n"
       );
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);
     // for EACH_INDEX(token_idx, tokens.count)
     // {
-    //   C_Token token = tokens.v[token_idx];
+    //   C_Token token = tokens+.v[token_idx];
     //   printf("Token %lu: %s [ %.*s ]\n",
     //          token_idx, C_Token_Type_strings[token.type], STRF(token.raw));
     // }

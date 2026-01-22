@@ -36,9 +36,9 @@ int main(int argc, char **argv)
   {
     String sample_program =
       STR(
-        "int foo;"
-        "float boo;"
-        "int bar = 1;"
+        "int foo;\n"
+        "float boo\n"
+        "int bar = 1;\n"
       );
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);
@@ -55,7 +55,7 @@ int main(int argc, char **argv)
     arena_clear(&arena);
   }
 
-  tester_summarize();
+  // tester_summarize();
 
   arena_free(&arena);
 }

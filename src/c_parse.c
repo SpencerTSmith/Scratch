@@ -9,7 +9,7 @@
   X(C_LEAF_NONE)             \
   X(C_LEAF_VARIABLE)         \
   X(C_LEAF_TYPE)             \
-  X(C_LEAF_CONSTANT)         \
+  X(C_LEAF_LITERAL)         \
   X(C_LEAF_ROOT)             \
   X(C_LEAF_DECLARATION)      \
   X(C_LEAF_COUNT)
@@ -40,17 +40,18 @@ struct C_Parser
   usize at;
 };
 
+// Could easily convert these to lookups
 b32 c_token_is_type_keyword(C_Token token)
 {
   C_Token_Type t = token.type;
 
-  b32 result = token.type == C_TOKEN_KEYWORD_VOID  ||
-               token.type == C_TOKEN_KEYWORD_CHAR  ||
-               token.type == C_TOKEN_KEYWORD_SHORT ||
-               token.type == C_TOKEN_KEYWORD_INT   ||
-               token.type == C_TOKEN_KEYWORD_LONG  ||
-               token.type == C_TOKEN_KEYWORD_FLOAT ||
-               token.type == C_TOKEN_KEYWORD_DOUBLE;
+  b32 result = t == C_TOKEN_KEYWORD_VOID  ||
+               t == C_TOKEN_KEYWORD_CHAR  ||
+               t == C_TOKEN_KEYWORD_SHORT ||
+               t == C_TOKEN_KEYWORD_INT   ||
+               t == C_TOKEN_KEYWORD_LONG  ||
+               t == C_TOKEN_KEYWORD_FLOAT ||
+               t == C_TOKEN_KEYWORD_DOUBLE;
 
   return result;
 }
@@ -59,19 +60,53 @@ b32 c_token_is_literal(C_Token token)
 {
   C_Token_Type t = token.type;
 
-  b32 result = token.type == C_TOKEN_LITERAL_CHAR   ||
-               token.type == C_TOKEN_LITERAL_INT    ||
-               token.type == C_TOKEN_LITERAL_DOUBLE ||
-               token.type == C_TOKEN_LITERAL_STRING;
+  b32 result = t == C_TOKEN_LITERAL_CHAR   ||
+               t == C_TOKEN_LITERAL_INT    ||
+               t == C_TOKEN_LITERAL_DOUBLE ||
+               t == C_TOKEN_LITERAL_STRING;
 
   return result;
 }
 
-C_Token c_parse_peek_token(C_Parser parser, usize offset)
+// TODO: account for comma operator... perhaps a flag if we are within a parenthetical
+b32 c_token_is_binary_operator(C_Token token)
+{
+  C_Token_Type t = token.type;
+
+  b32 result = t == C_TOKEN_STAR ||
+               t == C_TOKEN_ADD  ||
+               t == C_TOKEN_MINUS ||
+               t == C_TOKEN_DIVIDE ||
+               t == C_TOKEN_MODULO ||
+               t == C_TOKEN_XOR ||
+               t == C_TOKEN_BITWISE_AND ||
+               t == C_TOKEN_BITWISE_OR ||
+               t == C_TOKEN_DOT ||
+               t == C_TOKEN_ARROW ||
+               t == C_TOKEN_BITWISE_NOT ||
+               t == C_TOKEN_COMPARE_EQUAL ||
+               t == C_TOKEN_LESS_THAN ||
+               t == C_TOKEN_LESS_THAN_EQUAL ||
+               t == C_TOKEN_GREATER_THAN ||
+               t == C_TOKEN_GREATER_THAN_EQUAL ||
+               t == C_TOKEN_COMPARE_NOT_EQUAL ||
+               t == C_TOKEN_LOGICAL_AND ||
+               t == C_TOKEN_LOGICAL_OR;
+
+
+  return result;
+}
+
+void c_parse_error(usize line, const char *message)
+{
+  LOG_ERROR("[Line: %llu] %s", line, message);
+}
+
+C_Token c_parse_peek_token(C_Parser parser, isize offset)
 {
   C_Token result = {0};
 
-  if (parser.at + offset < parser.tokens.count)
+  if (parser.at + offset < parser.tokens.count && parser.at + offset >= 0)
   {
     result = parser.tokens.v[parser.at + offset];
   }
@@ -92,7 +127,7 @@ b32 c_parse_incomplete(C_Parser parser)
   return parser.at < parser.tokens.count;
 }
 
-C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
+C_Leaf *c_parse_expression_factor(Arena *arena, C_Parser *parser, C_Leaf *parent)
 {
   C_Leaf *result = arena_new(arena, C_Leaf);
 
@@ -100,10 +135,11 @@ C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
 
   if (c_token_is_literal(token))
   {
-    result->type = C_LEAF_CONSTANT;
+    result->type = C_LEAF_LITERAL;
     parser->at += 1;
   }
-  // TODO: other expressions
+
+  // TODO: other factors ... variable identifiers, function calls
   else if (false)
   {
 
@@ -112,6 +148,24 @@ C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
   c_leaf_add_child(parent, result);
 
   return result;
+}
+
+C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
+{
+  // TODO: unary operators
+  C_Leaf *left = c_parse_expression_factor(arena, parser, parent);
+
+  C_Leaf *result = left; // Return just the left if we don't meet later checks
+
+
+  // TODO: Maybe move this check to parse factor and return a nil leaf if no further operators
+  C_Token potential_binop = c_parse_peek_token(*parser, 0);
+  if (c_token_is_binary_operator(potential_binop))
+  {
+
+  }
+
+  return result; // NOTE: for now
 }
 
 C_Leaf *c_parse_type(Arena *arena, C_Parser *parser, C_Leaf *parent)
@@ -185,10 +239,16 @@ C_Leaf *c_parse_declaration(Arena *arena, C_Parser *parser, C_Leaf *parent)
   }
   else
   {
-    LOG_ERROR("Declaration without subsequent semicolon");
+    c_parse_error(c_parse_peek_token(*parser, -1).line,
+                  "Declaration without subsequent semicolon");
   }
 
   return result;
+}
+
+C_Leaf *c_parse_function(Arena *arena, C_Parser *parser, C_Leaf *parent)
+{
+
 }
 
 // Returns root leaf
@@ -210,6 +270,7 @@ C_Leaf *parse_c_tokens(Arena *arena, C_Token_Array tokens)
     usize to_consume = 0;
 
     C_Token token = c_parse_peek_token(parser, 0);
+    LOG_DEBUG("%.*s", STRF(token.raw));
 
     // TODO: Should also check for declaration if it is an identifier that is a type too
     if (c_token_is_type_keyword(token))
@@ -220,11 +281,10 @@ C_Leaf *parse_c_tokens(Arena *arena, C_Token_Array tokens)
       // Declaration, probably
       if (peek0.type == C_TOKEN_IDENTIFIER)
       {
-
         // Function thing
         if (peek1.type == C_TOKEN_BEGIN_PARENTHESIS)
         {
-          // TODO: Parse function
+          c_parse_function(arena, &parser, root);
         }
         // Variable variable thing
         else

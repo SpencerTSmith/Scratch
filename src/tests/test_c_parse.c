@@ -55,7 +55,8 @@ int main(int argc, char **argv)
         "int bar = 1;\n"
         "int baz = -1;\n"
         "int baz = -1 + 1;\n"
-        "int baz = 1 + 3 + 1;\n"
+        "int boo = 1 + 3 + 1;\n"
+        "int ban = bar++;"
       );
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);

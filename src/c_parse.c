@@ -186,7 +186,6 @@ C_Leaf *c_parse_expression_factor(Arena *arena, C_Parser *parser, C_Leaf *parent
     result->type = C_LEAF_LITERAL;
     parser->at += 1;
   }
-  // TODO: other factors ... variable identifiers, function calls
   else if (c_token_is_unary_operator(token))
   {
     result->type = C_LEAF_UNARY;
@@ -194,6 +193,11 @@ C_Leaf *c_parse_expression_factor(Arena *arena, C_Parser *parser, C_Leaf *parent
 
     // Grab child
     C_Leaf *unary_child = c_parse_expression_factor(arena, parser, result);
+  }
+  else if (token.type == C_TOKEN_IDENTIFIER)
+  {
+    result->type = C_LEAF_VARIABLE;
+    parser->at += 1;
   }
 
   c_leaf_add_child(parent, result);
@@ -226,7 +230,13 @@ C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
   // catch post increment, decrement here
   else if (c_token_is_unary_operator(peek))
   {
+    C_Leaf *unary_op = arena_new(arena, C_Leaf);
+    unary_op->type = C_LEAF_UNARY;
 
+    parser->at += 1;
+
+    // Hmm, should the post increment/decrement be a child of the expression... probably
+    c_leaf_add_child(result, unary_op);
   }
 
   c_leaf_add_child(parent, result);

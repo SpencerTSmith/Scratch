@@ -5,13 +5,15 @@
 
 #include "c_tokenize.h"
 
-#define C_Leaf_Type(X)       \
-  X(C_LEAF_NONE)             \
-  X(C_LEAF_VARIABLE)         \
-  X(C_LEAF_TYPE)             \
+#define C_Leaf_Type(X)      \
+  X(C_LEAF_NONE)            \
+  X(C_LEAF_VARIABLE)        \
+  X(C_LEAF_TYPE)            \
   X(C_LEAF_LITERAL)         \
-  X(C_LEAF_ROOT)             \
-  X(C_LEAF_DECLARATION)      \
+  X(C_LEAF_ROOT)            \
+  X(C_LEAF_DECLARATION)     \
+  X(C_LEAF_UNARY)           \
+  X(C_LEAF_BINARY)          \
   X(C_LEAF_COUNT)
 
 ENUM_TABLE(C_Leaf_Type);
@@ -68,6 +70,23 @@ b32 c_token_is_literal(C_Token token)
   return result;
 }
 
+b32 c_token_is_unary_operator(C_Token token)
+{
+  C_Token_Type t = token.type;
+
+  // Apparently add is also a unary?
+  b32 result = t == C_TOKEN_MINUS       ||
+               t == C_TOKEN_STAR        ||
+               t == C_TOKEN_INCREMENT   ||
+               t == C_TOKEN_DECREMENT   ||
+               t == C_TOKEN_ADD         ||
+               t == C_TOKEN_LOGICAL_AND ||
+               t == C_TOKEN_BITWISE_NOT ||
+               t == C_TOKEN_LOGICAL_NOT;
+
+  return result;
+}
+
 // TODO: account for comma operator... perhaps a flag if we are within a parenthetical
 b32 c_token_is_binary_operator(C_Token token)
 {
@@ -97,6 +116,31 @@ b32 c_token_is_binary_operator(C_Token token)
   return result;
 }
 
+// C_Leaf_Type c_token_to_binop_leaf(C_Token_Type type)
+// {
+//   C_Leaf_Type leaf = C_LEAF_NONE;
+//
+//   switch (type)
+//   {
+//     default:
+//     {
+//       LOG_ERROR("Unkown token to binop conversion");
+//     }
+//     case C_TOKEN_DIVIDE:
+//     {
+//       leaf = C_LEAF_
+//     }
+//     break;
+//     case C_TOKEN_STAR:
+//     {
+//
+//     }
+//     break;
+//   }
+//
+//   return leaf;
+// }
+
 void c_parse_error(usize line, const char *message)
 {
   LOG_ERROR("[Line: %llu] %s", line, message);
@@ -118,8 +162,12 @@ void c_leaf_add_child(C_Leaf *parent, C_Leaf *child)
 {
   child->parent = parent;
 
-  DLL_push_last(parent->first_child, parent->last_child, child, next_sibling, prev_sibling);
-  parent->child_count += 1;
+  // HACK: Hmm, should nil parent be possible or not?
+  if (parent)
+  {
+    DLL_push_last(parent->first_child, parent->last_child, child, next_sibling, prev_sibling);
+    parent->child_count += 1;
+  }
 }
 
 b32 c_parse_incomplete(C_Parser parser)
@@ -138,11 +186,14 @@ C_Leaf *c_parse_expression_factor(Arena *arena, C_Parser *parser, C_Leaf *parent
     result->type = C_LEAF_LITERAL;
     parser->at += 1;
   }
-
   // TODO: other factors ... variable identifiers, function calls
-  else if (false)
+  else if (c_token_is_unary_operator(token))
   {
+    result->type = C_LEAF_UNARY;
+    parser->at += 1;
 
+    // Grab child
+    C_Leaf *unary_child = c_parse_expression_factor(arena, parser, result);
   }
 
   c_leaf_add_child(parent, result);
@@ -152,20 +203,30 @@ C_Leaf *c_parse_expression_factor(Arena *arena, C_Parser *parser, C_Leaf *parent
 
 C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
 {
-  // TODO: unary operators
-  C_Leaf *left = c_parse_expression_factor(arena, parser, parent);
+  // We don't know the parent yet...
+  C_Leaf *left = c_parse_expression_factor(arena, parser, 0);
 
   C_Leaf *result = left; // Return just the left if we don't meet later checks
-
 
   // TODO: Maybe move this check to parse factor and return a nil leaf if no further operators
   C_Token potential_binop = c_parse_peek_token(*parser, 0);
   if (c_token_is_binary_operator(potential_binop))
   {
+    result = arena_new(arena, C_Leaf);
+    result->type = C_LEAF_BINARY;
+
+    parser->at += 1; // now skip the binop token
+
+    // Left should be child of operator
+    c_leaf_add_child(result, left);
+
+    C_Leaf *right = c_parse_expression(arena, parser, result);
 
   }
 
-  return result; // NOTE: for now
+  c_leaf_add_child(parent, result);
+
+  return result;
 }
 
 C_Leaf *c_parse_type(Arena *arena, C_Parser *parser, C_Leaf *parent)
@@ -184,7 +245,6 @@ C_Leaf *c_parse_type(Arena *arena, C_Parser *parser, C_Leaf *parent)
   // TODO: probably should build a data structure keeping track of structs, typedefs, etc
   else if (token.type == C_TOKEN_IDENTIFIER) // Custom type
   {
-
   }
 
   // Consume
@@ -228,6 +288,7 @@ C_Leaf *c_parse_declaration(Arena *arena, C_Parser *parser, C_Leaf *parent)
   {
     // Skip euqals sign
     parser->at += 1;
+
     // TODO: Parse expression
     c_parse_expression(arena, parser, result);
   }
@@ -270,7 +331,6 @@ C_Leaf *parse_c_tokens(Arena *arena, C_Token_Array tokens)
     usize to_consume = 0;
 
     C_Token token = c_parse_peek_token(parser, 0);
-    LOG_DEBUG("%.*s", STRF(token.raw));
 
     // TODO: Should also check for declaration if it is an identifier that is a type too
     if (c_token_is_type_keyword(token))

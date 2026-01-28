@@ -30,95 +30,101 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
       printf(">");
     }
 
-    if (node->type == C_NODE_LITERAL)
+    switch (node->type)
     {
-      C_Literal literal = node->literal;
-      switch (literal.type)
-      {
-        default: { LOG_ERROR("Invalid literal type"); } break;
+      default: { printf("%s", C_Node_Type_strings[node->type]); } break;
 
-        case C_LITERAL_CHARACTER:
+      case C_NODE_LITERAL:
+      {
+        C_Literal literal = node->literal;
+        switch (literal.type)
         {
-          printf("%c", literal.character);
-        }
-        break;
-        case C_LITERAL_STRING:
-        {
-          printf("%*.s", STRF(literal.string));
-        }
-        break;
-        case C_LITERAL_INTEGER:
-        {
-          // TODO: account for flags better
-          if (literal.flags & C_LITERAL_FLAG_UNSIGNED)
+          default: { LOG_ERROR("Invalid literal type"); } break;
+
+          case C_LITERAL_CHARACTER:
           {
-            printf("%lu", literal.integer.v);
+            printf("%c", literal.character);
           }
-          else
+          break;
+          case C_LITERAL_STRING:
           {
-            printf("%ld", (i64) literal.integer.v);
+            printf("%*.s", STRF(literal.string));
           }
+          break;
+          case C_LITERAL_INTEGER:
+          {
+            // TODO: account for flags better
+            if (literal.flags & C_LITERAL_FLAG_UNSIGNED)
+            {
+              printf("%lu", literal.integer.v);
+            }
+            else
+            {
+              printf("%ld", (i64) literal.integer.v);
+            }
+          }
+          break;
+          case C_LITERAL_FLOATING:
+          {
+            printf("%f", literal.floating);
+          }
+          break;
         }
-        break;
-        case C_LITERAL_FLOATING:
+      }
+      break;
+      case C_NODE_BINARY:
+      {
+        C_Binary binary = node->binary;
+        switch (binary)
         {
-          printf("%f", literal.floating);
+          default: { LOG_ERROR("Invalid binary type"); } break;
+
+          case C_BINARY_ADD:                { printf("+"); } break;
+          case C_BINARY_SUBTRACT:           { printf("-"); } break;
+          case C_BINARY_MULTIPLY:           { printf("*"); } break;
+          case C_BINARY_DIVIDE:             { printf("/"); } break;
+          case C_BINARY_MODULO:             { printf("%%"); } break;
+          case C_BINARY_XOR:                { printf("^"); } break;
+          case C_BINARY_BITWISE_AND:        { printf("&"); } break;
+          case C_BINARY_BITWISE_OR:         { printf("|"); }  break;
+          case C_BINARY_DOT:                { printf("."); } break;
+          case C_BINARY_ARROW:              { printf("->"); } break;
+          case C_BINARY_COMPARE_EQUAL:      { printf("=="); } break;
+          case C_BINARY_COMPARE_NOT_EQUAL:  { printf("!="); } break;
+          case C_BINARY_LESS_THAN:          { printf("<"); } break;
+          case C_BINARY_LESS_THAN_EQUAL:    { printf("<="); } break;
+          case C_BINARY_GREATER_THAN:       { printf(">"); } break;
+          case C_BINARY_GREATER_THAN_EQUAL: { printf(">="); } break;
+          case C_BINARY_LOGICAL_AND:        { printf("&&"); } break;
+          case C_BINARY_LOGICAL_OR:         { printf("||"); } break;
         }
-        break;
       }
-    }
-    else if (node->type == C_NODE_BINARY)
-    {
-      C_Binary binary = node->binary;
-      switch (binary)
+      break;
+      case C_NODE_UNARY:
       {
-        default: { LOG_ERROR("Invalid binary type"); } break;
+        C_Unary unary = node->unary;
+        switch (unary)
+        {
+          default: { LOG_ERROR("Invalid unary type"); } break;
 
-        case C_BINARY_ADD:                { printf("+"); } break;
-        case C_BINARY_SUBTRACT:           { printf("-"); } break;
-        case C_BINARY_MULTIPLY:           { printf("*"); } break;
-        case C_BINARY_DIVIDE:             { printf("/"); } break;
-        case C_BINARY_MODULO:             { printf("%%"); } break;
-        case C_BINARY_XOR:                { printf("^"); } break;
-        case C_BINARY_BITWISE_AND:        { printf("&"); } break;
-        case C_BINARY_BITWISE_OR:         { printf("|"); }  break;
-        case C_BINARY_DOT:                { printf("."); } break;
-        case C_BINARY_ARROW:              { printf("->"); } break;
-        case C_BINARY_COMPARE_EQUAL:      { printf("=="); } break;
-        case C_BINARY_COMPARE_NOT_EQUAL:  { printf("!="); } break;
-        case C_BINARY_LESS_THAN:          { printf("<"); } break;
-        case C_BINARY_LESS_THAN_EQUAL:    { printf("<="); } break;
-        case C_BINARY_GREATER_THAN:       { printf(">"); } break;
-        case C_BINARY_GREATER_THAN_EQUAL: { printf(">="); } break;
-        case C_BINARY_LOGICAL_AND:        { printf("&&"); } break;
-        case C_BINARY_LOGICAL_OR:         { printf("||"); } break;
+          case C_UNARY_PRE_INCREMENT:  { printf("pre++"); } break;
+          case C_UNARY_PRE_DECREMENT:  { printf("pre--"); } break;
+          case C_UNARY_POST_INCREMENT: { printf("post++"); } break;
+          case C_UNARY_POST_DECREMENT: { printf("post--"); } break;
+          case C_UNARY_NEGATE:         { printf("-"); } break;
+          case C_UNARY_REFERENCE:      { printf("&"); } break;
+          case C_UNARY_DEREFERENCE:    { printf("*"); } break;
+          case C_UNARY_BITWISE_NOT:    { printf("~"); }  break;
+          case C_UNARY_LOGICAL_NOT:    { printf("!"); } break;
+        }
       }
-    }
-    else if (node->type == C_NODE_UNARY)
-    {
-      C_Unary unary = node->unary;
-      switch (unary)
+      break;
+      case C_NODE_VARIABLE:
+      case C_NODE_TYPE:
       {
-        default: { LOG_ERROR("Invalid unary type"); } break;
-
-        case C_UNARY_PRE_INCREMENT:  { printf("pre++"); } break;
-        case C_UNARY_PRE_DECREMENT:  { printf("pre--"); } break;
-        case C_UNARY_POST_INCREMENT: { printf("post++"); } break;
-        case C_UNARY_POST_DECREMENT: { printf("post--"); } break;
-        case C_UNARY_NEGATE:         { printf("-"); } break;
-        case C_UNARY_REFERENCE:      { printf("&"); } break;
-        case C_UNARY_DEREFERENCE:    { printf("*"); } break;
-        case C_UNARY_BITWISE_NOT:    { printf("~"); }  break;
-        case C_UNARY_LOGICAL_NOT:    { printf("!"); } break;
+        printf("%.*s", STRF(node->name));
       }
-    }
-    else if (node->type == C_NODE_VARIABLE)
-    {
-      printf("%.*s", STRF(node->variable_name));
-    }
-    else
-    {
-      printf("%s", C_Node_Type_strings[node->type]);
+      break;
     }
     printf("\n");
 
@@ -142,8 +148,9 @@ int main(int argc, char **argv)
         // "int baz = -1 + 1;\n"
         // "int baz = -(1 + 1);\n"
         // "int boo = 1 + 3 + 1;\n"
-        "int ban = bar++;\n"
-        "int ban = ++bar;\n"
+        "int boo = 1 * 3 + 1;\n"
+        // "int ban = bar++;\n"
+        // "int ban = ++bar;\n"
         // "int ban = bar--;\n"
         // "int par = 1 + (1 + 1) + (1 + 1);\n"
         // "int par = 1 + (1 + 1) + bar++;\n"

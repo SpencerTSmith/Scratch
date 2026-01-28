@@ -289,7 +289,7 @@ JSON_Object *parse_json_object(Arena *arena, JSON_Parser *parser, String key, JS
   else
   {
     LOG_ERROR("Unexpected token type encountered while parsing json object: %s, (value = %.*s)", JSON_Token_Type_strings[token.type], token.value);
-          parser->had_error = true;
+    parser->had_error = true;
   }
 
   JSON_Object *result  = arena_new(arena, JSON_Object);
@@ -370,7 +370,6 @@ JSON_Object *parse_json_children(Arena *arena, JSON_Parser *parser,
       }
     }
 
-    // We either want the end, or a comma
     JSON_Token expect_comma_or_end = get_json_token(parser);
     if (expect_comma_or_end.type == end_token)
     {

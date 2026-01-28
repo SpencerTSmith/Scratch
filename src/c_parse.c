@@ -14,7 +14,6 @@
   X(C_NODE_VARIABLE_DECLARATION) \
   X(C_NODE_UNARY)                \
   X(C_NODE_BINARY)               \
-  X(C_NODE_PARENTHETICAL)        \
   X(C_NODE_COUNT)
 
 ENUM_TABLE(C_Node_Type);
@@ -78,7 +77,7 @@ struct C_Node
 
   union
   {
-    String    variable_name;
+    String    name;
     C_Literal literal;
     C_Binary  binary;
     C_Unary   unary;
@@ -255,7 +254,7 @@ C_Node *c_nil_node()
   return &nil;
 }
 
-C_Node *c_parse_variable(Arena *arena, C_Parser *parser, C_Node *parent)
+C_Node *c_parse_variable(Arena *arena, C_Parser *parser)
 {
   C_Node *result = arena_new(arena, C_Node);
 
@@ -264,9 +263,7 @@ C_Node *c_parse_variable(Arena *arena, C_Parser *parser, C_Node *parent)
   if (token.type == C_TOKEN_IDENTIFIER)
   {
     result->type = C_NODE_VARIABLE;
-    result->variable_name = token.raw;
-
-    c_node_add_child(parent, result);
+    result->name = token.raw;
 
     // TODO: the rest
   }
@@ -281,11 +278,11 @@ C_Node *c_parse_variable(Arena *arena, C_Parser *parser, C_Node *parent)
   return result;
 }
 
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser, C_Node *parent);
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser);
 
 // TODO: Better name... basically just capture the part that would act like a leaf of a tree...  but not a real leaf as with parentheses
 // this will could potentially be a rather large subtree acting like a leaf
-C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser, C_Node *parent)
+C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 {
   C_Token token = c_parse_peek_token(*parser, 0);
 
@@ -310,7 +307,8 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser, C_Node *parent)
 
     parser->at += 1;
 
-    C_Node *unary_child = c_parse_expression_start(arena, parser, result);
+    C_Node *expression = c_parse_expression_start(arena, parser);
+    c_node_add_child(result, expression);
   }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {
@@ -318,7 +316,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser, C_Node *parent)
 
     if (peek.type != C_TOKEN_BEGIN_PARENTHESIS)
     {
-      result = c_parse_variable(arena, parser, parent);
+      result = c_parse_variable(arena, parser);
     }
     else
     {
@@ -327,13 +325,9 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser, C_Node *parent)
   }
   else if (token.type == C_TOKEN_BEGIN_PARENTHESIS)
   {
-    // TODO: Not necessary to have a node for parentheses...
-    result = arena_new(arena, C_Node);
-    result->type = C_NODE_PARENTHETICAL;
-
     parser->at += 1;
 
-    C_Node *inner = c_parse_expression(arena, parser, result);
+    result = c_parse_expression(arena, parser);
 
     if (!c_parse_expect(*parser, C_TOKEN_CLOSE_PARENTHESIS))
     {
@@ -345,18 +339,16 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser, C_Node *parent)
     }
   }
 
-  c_node_add_child(parent, result);
-
   return result;
 }
 
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser, C_Node *parent)
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser)
 {
-  // We don't know the parent yet, so pass 0
-  C_Node *left = c_parse_expression_start(arena, parser, 0);
+  C_Node *left = c_parse_expression_start(arena, parser);
 
   C_Node *result = left; // Return just the left if we don't meet later checks
 
+#if 0
   C_Token peek = c_parse_peek_token(*parser, 0);
   if (c_token_is_binary_operator(peek))
   {
@@ -366,11 +358,12 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, C_Node *parent)
 
     parser->at += 1; // now skip the binop token
 
-    // Left should be child of operator
-    c_node_add_child(result, left);
-
     // Grab right
-    C_Node *right = c_parse_expression(arena, parser, result);
+    C_Node *right = c_parse_expression(arena, parser);
+
+    // Add children to binary operator
+    c_node_add_child(result, left);
+    c_node_add_child(result, right);
   }
   // catch post increment, decrement here
   else if (c_token_is_unary_operator(peek))
@@ -385,17 +378,39 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, C_Node *parent)
 
     c_node_add_child(result, left);
   }
-  else if (peek.type == C_TOKEN_CLOSE_PARENTHESIS)
+#else
+  while (true)
   {
-    // Do nothing and return, checking for close will be done by caller
-  }
+    C_Token peek = c_parse_peek_token(*parser, 0);
 
-  c_node_add_child(parent, result);
+    if (c_token_is_binary_operator(peek))
+    {
+      result = arena_new(arena, C_Node);
+      result->type = C_NODE_BINARY;
+      result->binary = c_token_to_binary(peek);
+
+      parser->at += 1;
+
+      C_Node *right = c_parse_expression_start(arena, parser);
+
+      c_node_add_child(result, left);
+      c_node_add_child(result, right);
+    }
+    else
+    {
+      result = left;
+    }
+
+    if (result == left) { break; }
+
+    left = result;
+  }
+#endif
 
   return result;
 }
 
-C_Node *c_parse_type(Arena *arena, C_Parser *parser, C_Node *parent)
+C_Node *c_parse_type(Arena *arena, C_Parser *parser)
 {
   C_Node *result = arena_new(arena, C_Node);
 
@@ -404,9 +419,7 @@ C_Node *c_parse_type(Arena *arena, C_Parser *parser, C_Node *parent)
   if (c_token_is_type_keyword(token))
   {
     result->type = C_NODE_TYPE;
-    result->variable_name = token.raw; // Hehehe, nice to just do this
-
-    c_node_add_child(parent, result);
+    result->name = token.raw; // Hehehe, nice to just do this
   }
   // TODO: probably should build a data structure keeping track of structs, typedefs, etc
   else if (token.type == C_TOKEN_IDENTIFIER) // Custom type
@@ -419,14 +432,16 @@ C_Node *c_parse_type(Arena *arena, C_Parser *parser, C_Node *parent)
   return result;
 }
 
-C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser, C_Node *parent)
+C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
 {
   C_Node *result = arena_new(arena, C_Node);
   result->type = C_NODE_VARIABLE_DECLARATION;
-  c_node_add_child(parent, result);
 
-  C_Node *type_node = c_parse_type(arena, parser, result);
-  C_Node *name_node = c_parse_variable(arena, parser, result);
+  C_Node *type_node = c_parse_type(arena, parser);
+  c_node_add_child(result, type_node); // First child is type of decl
+
+  C_Node *name_node = c_parse_variable(arena, parser);
+  c_node_add_child(result, name_node); // First child is type of decl
 
   C_Token peek = c_parse_peek_token(*parser, 0);
 
@@ -435,7 +450,8 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser, C_Node *par
     // Skip euqals sign
     parser->at += 1;
 
-    c_parse_expression(arena, parser, result);
+    C_Node *expression = c_parse_expression(arena, parser);
+    c_node_add_child(result, expression);
   }
 
   C_Token wish_semicolon = c_parse_peek_token(*parser, 0);
@@ -494,7 +510,8 @@ C_Node *parse_c_tokens(Arena *arena, C_Token_Array tokens)
         // Variable thing
         else
         {
-          c_parse_variable_declaration(arena, &parser, root);
+          C_Node *variable_declaration = c_parse_variable_declaration(arena, &parser);
+          c_node_add_child(root, variable_declaration);
         }
       }
     }

@@ -302,6 +302,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser, C_Node *parent)
   }
   else if (c_token_is_unary_operator(token))
   {
+    result = arena_new(arena, C_Node);
     result->type = C_NODE_UNARY;
 
     b32 is_post = false;
@@ -326,7 +327,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser, C_Node *parent)
   }
   else if (token.type == C_TOKEN_BEGIN_PARENTHESIS)
   {
-    // New parenthetical group
+    // TODO: Not necessary to have a node for parentheses...
     result = arena_new(arena, C_Node);
     result->type = C_NODE_PARENTHETICAL;
 

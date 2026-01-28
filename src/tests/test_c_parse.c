@@ -7,7 +7,7 @@
 #include "../c_tokenize.c"
 #include "../c_parse.c"
 
-void print_c_ast(C_Leaf *leaf, isize prev_depth, isize depth)
+void print_c_ast(C_Node *leaf, isize prev_depth, isize depth)
 {
   if (leaf)
   {
@@ -30,14 +30,9 @@ void print_c_ast(C_Leaf *leaf, isize prev_depth, isize depth)
       printf(">");
     }
 
-    printf("%s\n", C_Leaf_Type_strings[leaf->type]);
+    printf("%s\n", C_Node_Type_strings[leaf->type]);
 
-    // if (leaf->type == C_LEAF_TYPE)
-    // {
-    //   printf("%.*s\n", leaf->);
-    // }
-
-    for (C_Leaf *cursor = leaf->first_child; cursor; cursor = cursor->next_sibling)
+    for (C_Node *cursor = leaf->first_child; cursor; cursor = cursor->next_sibling)
     {
       print_c_ast(cursor, depth, depth + 1);
     }
@@ -60,6 +55,7 @@ int main(int argc, char **argv)
         // "int ban = bar++;\n"
         // "int ban = bar--;\n"
         // "int par = 1 + (1 + 1) + (1 + 1);\n"
+        // "int par = 1 + (1 + 1) + bar++;\n"
       );
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);
@@ -70,7 +66,7 @@ int main(int argc, char **argv)
     //          token_idx, C_Token_Type_strings[token.type], STRF(token.raw));
     // }
 
-    C_Leaf *root = parse_c_tokens(&arena, tokens);
+    C_Node *root = parse_c_tokens(&arena, tokens);
     print_c_ast(root, 0, 0);
 
     arena_clear(&arena);

@@ -5,39 +5,40 @@
 
 #include "c_tokenize.h"
 
-#define C_Leaf_Type(X)      \
-  X(C_LEAF_NONE)            \
-  X(C_LEAF_VARIABLE)        \
-  X(C_LEAF_TYPE)            \
-  X(C_LEAF_LITERAL)         \
-  X(C_LEAF_ROOT)            \
-  X(C_LEAF_DECLARATION)     \
-  X(C_LEAF_UNARY)           \
-  X(C_LEAF_BINARY)          \
-  X(C_LEAF_PARENTHETICAL)   \
-  X(C_LEAF_COUNT)
+#define C_Node_Type(X)           \
+  X(C_NODE_NONE)                 \
+  X(C_NODE_VARIABLE)             \
+  X(C_NODE_TYPE)                 \
+  X(C_NODE_LITERAL)              \
+  X(C_NODE_ROOT)                 \
+  X(C_NODE_VARIABLE_DECLARATION) \
+  X(C_NODE_UNARY)                \
+  X(C_NODE_BINARY)               \
+  X(C_NODE_PARENTHETICAL)        \
+  X(C_NODE_COUNT)
 
-ENUM_TABLE(C_Leaf_Type);
+ENUM_TABLE(C_Node_Type);
 
-typedef struct C_Leaf C_Leaf;
-struct C_Leaf
+typedef struct C_Node C_Node;
+struct C_Node
 {
-  C_Leaf_Type type;
+  C_Node_Type type;
 
-  C_Leaf *parent;
+  C_Node *parent;
 
-  C_Leaf *first_child;
-  C_Leaf *last_child;
+  C_Node *first_child;
+  C_Node *last_child;
   usize  child_count;
 
-  C_Leaf *next_sibling;
-  C_Leaf *prev_sibling;
+  C_Node *next_sibling;
+  C_Node *prev_sibling;
 
   union
   {
     String variable_name;
     struct
     {
+
 
     };
   };
@@ -62,18 +63,6 @@ b32 c_token_is_type_keyword(C_Token token)
                t == C_TOKEN_KEYWORD_LONG  ||
                t == C_TOKEN_KEYWORD_FLOAT ||
                t == C_TOKEN_KEYWORD_DOUBLE;
-
-  return result;
-}
-
-b32 c_token_is_literal(C_Token token)
-{
-  C_Token_Type t = token.type;
-
-  b32 result = t == C_TOKEN_LITERAL_CHAR   ||
-               t == C_TOKEN_LITERAL_INT    ||
-               t == C_TOKEN_LITERAL_DOUBLE ||
-               t == C_TOKEN_LITERAL_STRING;
 
   return result;
 }
@@ -124,31 +113,6 @@ b32 c_token_is_binary_operator(C_Token token)
   return result;
 }
 
-// C_Leaf_Type c_token_to_binop_leaf(C_Token_Type type)
-// {
-//   C_Leaf_Type leaf = C_LEAF_NONE;
-//
-//   switch (type)
-//   {
-//     default:
-//     {
-//       LOG_ERROR("Unkown token to binop conversion");
-//     }
-//     case C_TOKEN_DIVIDE:
-//     {
-//       leaf = C_LEAF_
-//     }
-//     break;
-//     case C_TOKEN_STAR:
-//     {
-//
-//     }
-//     break;
-//   }
-//
-//   return leaf;
-// }
-
 void c_parse_error(usize line, const char *message)
 {
   LOG_ERROR("[Line: %llu] %s", line, message);
@@ -166,11 +130,10 @@ C_Token c_parse_peek_token(C_Parser parser, isize offset)
   return result;
 }
 
-void c_leaf_add_child(C_Leaf *parent, C_Leaf *child)
+void c_node_add_child(C_Node *parent, C_Node *child)
 {
   child->parent = parent;
 
-  // HACK: Hmm, should nil parent be possible or not?
   if (parent)
   {
     DLL_push_last(parent->first_child, parent->last_child, child, next_sibling, prev_sibling);
@@ -183,29 +146,27 @@ b32 c_parse_incomplete(C_Parser parser)
   return parser.at < parser.tokens.count;
 }
 
-C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent);
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser, C_Node *parent);
 
-C_Leaf *c_parse_expression_left(Arena *arena, C_Parser *parser, C_Leaf *parent)
+// TODO: Better name... basically just capture the part that would act like a leaf of a tree...  but not a real leaf as with parentheses
+// this will could potentially be a rather large subtree acting like a leaf
+C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser, C_Node *parent)
 {
-
   C_Token token = c_parse_peek_token(*parser, 0);
 
-  C_Leaf *result = arena_new(arena, C_Leaf);
+  C_Node *result = arena_new(arena, C_Node);
 
-  if (c_token_is_literal(token))
+  if (token.type == C_TOKEN_LITERAL)
   {
-    result->type = C_LEAF_LITERAL;
+    result->type = C_NODE_LITERAL;
     parser->at += 1;
   }
   else if (c_token_is_unary_operator(token))
   {
-    result->type = C_LEAF_UNARY;
+    result->type = C_NODE_UNARY;
     parser->at += 1;
 
-    // HACK: ugly... simpler way?
-    C_Leaf *unary_child = c_parse_peek_token(*parser, 0).type != C_TOKEN_BEGIN_PARENTHESIS ?
-                          c_parse_expression_left(arena, parser, result) :
-                          c_parse_expression(arena, parser, result);
+    C_Node *unary_child = c_parse_expression_start(arena, parser, result);
   }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {
@@ -213,7 +174,7 @@ C_Leaf *c_parse_expression_left(Arena *arena, C_Parser *parser, C_Leaf *parent)
 
     if (peek.type != C_TOKEN_BEGIN_PARENTHESIS)
     {
-      result->type = C_LEAF_VARIABLE;
+      result->type = C_NODE_VARIABLE;
       parser->at += 1;
     }
     else
@@ -224,77 +185,73 @@ C_Leaf *c_parse_expression_left(Arena *arena, C_Parser *parser, C_Leaf *parent)
   else if (token.type == C_TOKEN_BEGIN_PARENTHESIS)
   {
     // New parenthetical group
-    result = arena_new(arena, C_Leaf);
-    result->type = C_LEAF_PARENTHETICAL;
+    result = arena_new(arena, C_Node);
+    result->type = C_NODE_PARENTHETICAL;
 
     parser->at += 1;
 
-    C_Leaf *inner = c_parse_expression(arena, parser, result);
+    C_Node *inner = c_parse_expression(arena, parser, result);
   }
 
-  c_leaf_add_child(parent, result);
+  c_node_add_child(parent, result);
 
   return result;
 }
 
-C_Leaf *c_parse_expression(Arena *arena, C_Parser *parser, C_Leaf *parent)
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser, C_Node *parent)
 {
-  // We don't know the parent yet...
-  // TODO: Actually think these 2 functions parse_expresssion_factor and parse_expression can become one
-  //
-  // TODO: If expression begins with parenthesis we allocate a new empty node for no reason in this call... fix
-  C_Leaf *left = c_parse_expression_left(arena, parser, 0);
+  // We don't know the parent yet, so pass 0
+  C_Node *left = c_parse_expression_start(arena, parser, 0);
 
-  C_Leaf *result = left; // Return just the left if we don't meet later checks
+  C_Node *result = left; // Return just the left if we don't meet later checks
 
-  // TODO: Maybe move this check to parse factor and return a nil leaf if no further operators
   C_Token peek = c_parse_peek_token(*parser, 0);
   if (c_token_is_binary_operator(peek))
   {
-    result = arena_new(arena, C_Leaf);
-    result->type = C_LEAF_BINARY;
+    result = arena_new(arena, C_Node);
+    result->type = C_NODE_BINARY;
 
     parser->at += 1; // now skip the binop token
 
     // Left should be child of operator
-    c_leaf_add_child(result, left);
+    c_node_add_child(result, left);
 
-    C_Leaf *right = c_parse_expression(arena, parser, result);
+    // Grab right
+    C_Node *right = c_parse_expression(arena, parser, result);
   }
   // catch post increment, decrement here
   else if (c_token_is_unary_operator(peek))
   {
-    C_Leaf *unary_op = arena_new(arena, C_Leaf);
-    unary_op->type = C_LEAF_UNARY;
+    result = arena_new(arena, C_Node);
+    result->type = C_NODE_UNARY;
 
     parser->at += 1;
 
-    // Hmm, should the post increment/decrement be a child of the expression... probably
-    c_leaf_add_child(result, unary_op);
+    c_node_add_child(result, left);
   }
   else if (peek.type == C_TOKEN_CLOSE_PARENTHESIS)
   {
-    // just skip this and return
+    // FIXME: Should just skip this here? Or have caller expect a closed parenthesis?
     parser->at += 1;
   }
 
-  c_leaf_add_child(parent, result);
+  c_node_add_child(parent, result);
 
   return result;
 }
 
-C_Leaf *c_parse_type(Arena *arena, C_Parser *parser, C_Leaf *parent)
+C_Node *c_parse_type(Arena *arena, C_Parser *parser, C_Node *parent)
 {
-  C_Leaf *result = arena_new(arena, C_Leaf);
+  C_Node *result = arena_new(arena, C_Node);
 
   C_Token token = c_parse_peek_token(*parser, 0);
 
   if (c_token_is_type_keyword(token))
   {
-    result->type = C_LEAF_TYPE;
+    result->type = C_NODE_TYPE;
     result->variable_name = token.raw; // Hehehe, nice to just do this
 
-    c_leaf_add_child(parent, result);
+    c_node_add_child(parent, result);
   }
   // TODO: probably should build a data structure keeping track of structs, typedefs, etc
   else if (token.type == C_TOKEN_IDENTIFIER) // Custom type
@@ -307,19 +264,19 @@ C_Leaf *c_parse_type(Arena *arena, C_Parser *parser, C_Leaf *parent)
   return result;
 }
 
-C_Leaf *c_parse_variable(Arena *arena, C_Parser *parser, C_Leaf *parent)
+C_Node *c_parse_variable(Arena *arena, C_Parser *parser, C_Node *parent)
 {
-  C_Leaf *result = arena_new(arena, C_Leaf);
+  C_Node *result = arena_new(arena, C_Node);
 
   C_Token token = c_parse_peek_token(*parser, 0);
 
   if (token.type == C_TOKEN_IDENTIFIER)
   {
-    result->type = C_LEAF_VARIABLE;
+    result->type = C_NODE_VARIABLE;
     result->variable_name = token.raw;
 
     // TODO: probably need to do other stuff?
-    c_leaf_add_child(parent, result);
+    c_node_add_child(parent, result);
   }
 
   // Consume
@@ -328,14 +285,14 @@ C_Leaf *c_parse_variable(Arena *arena, C_Parser *parser, C_Leaf *parent)
   return result;
 }
 
-C_Leaf *c_parse_declaration(Arena *arena, C_Parser *parser, C_Leaf *parent)
+C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser, C_Node *parent)
 {
-  C_Leaf *result = arena_new(arena, C_Leaf);
-  result->type = C_LEAF_DECLARATION;
-  c_leaf_add_child(parent, result);
+  C_Node *result = arena_new(arena, C_Node);
+  result->type = C_NODE_VARIABLE_DECLARATION;
+  c_node_add_child(parent, result);
 
-  C_Leaf *type_leaf = c_parse_type(arena, parser, result);
-  C_Leaf *name_leaf = c_parse_variable(arena, parser, result);
+  C_Node *type_node = c_parse_type(arena, parser, result);
+  C_Node *name_node = c_parse_variable(arena, parser, result);
 
   C_Token peek = c_parse_peek_token(*parser, 0);
 
@@ -344,7 +301,6 @@ C_Leaf *c_parse_declaration(Arena *arena, C_Parser *parser, C_Leaf *parent)
     // Skip euqals sign
     parser->at += 1;
 
-    // TODO: Parse expression
     c_parse_expression(arena, parser, result);
   }
 
@@ -362,18 +318,18 @@ C_Leaf *c_parse_declaration(Arena *arena, C_Parser *parser, C_Leaf *parent)
   return result;
 }
 
-C_Leaf *c_parse_function(Arena *arena, C_Parser *parser, C_Leaf *parent)
+C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser, C_Node *parent)
 {
 
 }
 
-// Returns root leaf
+// Returns root node
 static
-C_Leaf *parse_c_tokens(Arena *arena, C_Token_Array tokens)
+C_Node *parse_c_tokens(Arena *arena, C_Token_Array tokens)
 {
 
-  C_Leaf *root = arena_new(arena, C_Leaf);
-  root->type = C_LEAF_ROOT;
+  C_Node *root = arena_new(arena, C_Node);
+  root->type = C_NODE_ROOT;
 
   C_Parser parser =
   {
@@ -399,12 +355,12 @@ C_Leaf *parse_c_tokens(Arena *arena, C_Token_Array tokens)
         // Function thing
         if (peek1.type == C_TOKEN_BEGIN_PARENTHESIS)
         {
-          c_parse_function(arena, &parser, root);
+          c_parse_function_declaration(arena, &parser, root);
         }
-        // Variable variable thing
+        // Variable thing
         else
         {
-          c_parse_declaration(arena, &parser, root);
+          c_parse_variable_declaration(arena, &parser, root);
         }
       }
     }
@@ -412,5 +368,4 @@ C_Leaf *parse_c_tokens(Arena *arena, C_Token_Array tokens)
 
   return root;
 }
-
 #endif // C_PARSE

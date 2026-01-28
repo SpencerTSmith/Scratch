@@ -372,7 +372,8 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     }
     else if (curr_char == '"') // String literal
     {
-      token.type = C_TOKEN_LITERAL_STRING;
+      token.type = C_TOKEN_LITERAL;
+      token.literal.type = C_LITERAL_STRING;
 
       usize end = lexer.at + 1;
 
@@ -401,11 +402,14 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         array_add(arena, literal, c);
       }
 
-      token.string_literal = literal;
+      token.literal.string = literal;
       token.raw = string_substring(lexer.source, lexer.at, end);
     }
     else if (curr_char == '\'') // Character literal
     {
+      token.type = C_TOKEN_LITERAL;
+      token.literal.type = C_LITERAL_CHARACTER;
+
       usize end = lexer.at + 1;
 
       u8 c = c_lexer_peek_at(lexer, end);
@@ -435,19 +439,19 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
                    char_is_digit_base(lexer.source.v[end], byte_base))
             {
               u8 digit = char_to_digit_base(lexer.source.v[end], byte_base);
-              token.char_literal = (byte_base * token.char_literal) + digit;
+              token.literal.character = (byte_base * token.literal.character) + digit;
               end += 1;
             }
           }
           else if (c < STATIC_COUNT(c_char_escape_table)) // Just a normal escape
           {
-            token.char_literal = c_char_escape_table[c];
+            token.literal.character = c_char_escape_table[c];
             end += 1;
           }
         }
         else // No escapes, just the character
         {
-          token.char_literal = c;
+          token.literal.character = c;
           end += 1;
         }
 
@@ -462,7 +466,6 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           LOG_ERROR("Encountered unterminated character literal.");
         }
 
-        token.type = C_TOKEN_LITERAL_CHAR;
         token.raw  = string_substring(lexer.source, lexer.at, end);
       }
       else
@@ -472,9 +475,11 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
     }
     else if (char_is_digit(curr_char)) // Number literal
     {
+      token.type = C_TOKEN_LITERAL;
+
       // By default
-      token.type = C_TOKEN_LITERAL_INT;
-      token.int_literal.base = 10;
+      token.literal.type = C_LITERAL_INTEGER;
+      token.literal.integer.base = 10;
 
       usize end = lexer.at;
 
@@ -483,23 +488,23 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
         u8 c = c_lexer_peek_at(lexer, end + 1);
         if (c == 'x' || c == 'X')
         {
-          token.int_literal.base = 16;
+          token.literal.integer.base = 16;
           end += 2;
         }
         else if (c == 'b' || c == 'B')
         {
-          token.int_literal.base = 2;
+          token.literal.integer.base = 2;
           end += 2;
         }
       }
 
       b32 had_digit = false;
 
-      while (c_lexer_in_bounds(lexer, end) && char_is_digit_base(lexer.source.v[end], token.int_literal.base))
+      while (c_lexer_in_bounds(lexer, end) && char_is_digit_base(lexer.source.v[end], token.literal.integer.base))
       {
-        u64 digit = char_to_digit_base(lexer.source.v[end], token.int_literal.base);
-        u64 base  = token.int_literal.base;
-        token.int_literal.v = base * token.int_literal.v + digit;
+        u64 digit = char_to_digit_base(lexer.source.v[end], token.literal.integer.base);
+        u64 base  = token.literal.integer.base;
+        token.literal.integer.v = base * token.literal.integer.v + digit;
         end += 1;
 
         had_digit = true;
@@ -507,27 +512,27 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
       // Different base literals must have a digit following the base signifier,
       // e.g. 0x1 valid but 0x not valid
-      if (!had_digit && token.int_literal.base != 10)
+      if (!had_digit && token.literal.integer.base != 10)
       {
         token.type = C_TOKEN_NONE;
-        String base_string = token.int_literal.base == 2 ? STR("Hexadecimal") : STR("Binary");
+        String base_string = token.literal.integer.base == 2 ? STR("Hexadecimal") : STR("Binary");
         LOG_ERROR("%.*s integer literals must include a digit following the x", STRF(base_string));
       }
 
       // Collect decimals if present and haven't changed base
-      if (token.int_literal.base == 10 &&
+      if (token.literal.integer.base == 10 &&
           c_lexer_peek_at(lexer, end) == '.')
       {
-        token.type = C_TOKEN_LITERAL_DOUBLE;
+        token.literal.type = C_LITERAL_FLOATING;
         end += 1;
 
-        token.float_literal = (f64)token.int_literal.v;
+        token.literal.floating = (f64)token.literal.integer.v;
 
         f64 factor = 1.0 / 10.0;
         while (c_lexer_in_bounds(lexer, end) && char_is_digit(lexer.source.v[end]))
         {
           u64 digit = lexer.source.v[end] - '0';
-          token.float_literal = (f64)token.float_literal + (factor * (f64)digit);
+          token.literal.floating = (f64)token.literal.floating + (factor * (f64)digit);
           factor *= 1.0 / 10.0;
 
           end += 1;
@@ -536,18 +541,18 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
       // A floating point literal can have an Exponent part without also having a decimal,
       // so check also if we have an integer base 10 so far
-      b32 maybe_exponent = token.type == C_TOKEN_LITERAL_DOUBLE || token.int_literal.base == 10;
+      b32 maybe_exponent = token.literal.type == C_LITERAL_FLOATING || token.literal.integer.base == 10;
 
       if (maybe_exponent &&
           (c_lexer_peek_at(lexer, end) == 'e' || c_lexer_peek_at(lexer, end) == 'E'))
       {
         // If we haven't gotten a decimal yet, we need to do conversion to float here
-        if (token.type == C_TOKEN_LITERAL_INT)
+        if (token.literal.type == C_LITERAL_INTEGER)
         {
-          token.float_literal = (f64)token.int_literal.v;
+          token.literal.floating = (f64)token.literal.integer.v;
         }
 
-        token.type = C_TOKEN_LITERAL_DOUBLE;
+        token.literal.type = C_LITERAL_FLOATING;
         end += 1;
 
         f64 sign = 1;
@@ -571,7 +576,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
         if (valid_exponent)
         {
-          token.float_literal *= pow(10.0, sign * exponent);
+          token.literal.floating *= pow(10.0, sign * exponent);
         }
         else
         {
@@ -584,27 +589,27 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
       {
         u8 c = c_lexer_peek_at(lexer, end);
 
-        if (token.type == C_TOKEN_LITERAL_DOUBLE)
+        // If we've gotten a decimal or E, check if its actually a float literal
+        if (token.literal.type == C_LITERAL_FLOATING)
         {
           if (c == 'f' || c == 'F')
           {
-            token.flags |= C_TOKEN_FLAG_LITERAL_FLOAT; // Float literal
+            token.literal.flags |= C_LITERAL_FLAG_FLOAT; // Float literal
             end += 1;
           }
           // NOTE: Apparently there are long doubles? Not going to bother with with actually trying to grab the full 80 (128?) bits
           else if (c == 'l' || c == 'L')
           {
-            token.flags |= C_TOKEN_FLAG_LITERAL_LONG;
+            token.literal.flags |= C_LITERAL_FLAG_LONG;
             end += 1;
           }
         }
-        else if (token.type == C_TOKEN_LITERAL_INT)
+        else if (token.literal.type == C_LITERAL_INTEGER)
         {
           if (c == 'u' || c == 'U')
           {
-            token.flags |= C_TOKEN_FLAG_LITERAL_UNSIGNED;
+            token.literal.flags |= C_LITERAL_FLAG_UNSIGNED;
             end += 1;
-            LOG_INFO("Here: %lu", token.flags);
           }
 
           // TODO: I actually quite like this... make usage code less branchy, replace most cases of c_lexer_in_bounds() with this
@@ -613,7 +618,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
           // Check for long modifier... need to again check
           if (peek == 'l' || peek == 'L')
           {
-            token.flags |= C_TOKEN_FLAG_LITERAL_LONG;
+            token.literal.flags |= C_LITERAL_FLAG_LONG;
             end += 1;
 
             peek = c_lexer_peek_at(lexer, end);
@@ -621,7 +626,7 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
             // TODO: Inelegant
             if (peek == 'l' || peek == 'L')
             {
-              token.flags |= C_TOKEN_FLAG_LITERAL_2ND_LONG;
+              token.literal.flags |= C_LITERAL_FLAG_2ND_LONG;
               end += 1;
             }
           }

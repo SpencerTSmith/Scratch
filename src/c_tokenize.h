@@ -46,10 +46,7 @@
   X(C_TOKEN_LOGICAL_OR)                 \
   X(C_TOKEN_QUESTION)                   \
   X(C_TOKEN_COLON)                      \
-  X(C_TOKEN_LITERAL_STRING)             \
-  X(C_TOKEN_LITERAL_CHAR)               \
-  X(C_TOKEN_LITERAL_INT)                \
-  X(C_TOKEN_LITERAL_DOUBLE)             \
+  X(C_TOKEN_LITERAL)                    \
   X(C_TOKEN_KEYWORD_FOR)                \
   X(C_TOKEN_KEYWORD_WHILE)              \
   X(C_TOKEN_KEYWORD_DO)                 \
@@ -89,35 +86,55 @@
 
 ENUM_TABLE(C_Token_Type);
 
-typedef enum C_Token_Flags
+typedef enum C_Literal_Flags
 {
-  C_TOKEN_FLAG_LITERAL_UNSIGNED = 1 << 0,
-  C_TOKEN_FLAG_LITERAL_LONG     = 1 << 1,
-  C_TOKEN_FLAG_LITERAL_2ND_LONG = 1 << 2,
-  C_TOKEN_FLAG_LITERAL_FLOAT    = 1 << 3,
-} C_Token_Flags;
+  C_LITERAL_FLAG_UNSIGNED = 1 << 0,
+  C_LITERAL_FLAG_LONG     = 1 << 1,
+  C_LITERAL_FLAG_2ND_LONG = 1 << 2,
+  C_LITERAL_FLAG_FLOAT    = 1 << 3,
+} C_Literal_Flags;
+
+typedef enum C_Literal_Type
+{
+  C_LITERAL_NONE,
+
+  C_LITERAL_CHARACTER,
+  C_LITERAL_STRING,
+  C_LITERAL_INTEGER,
+  C_LITERAL_FLOATING,
+
+  C_LITERAL_COUNT,
+} C_Literal_Type;
+
+typedef struct C_Literal C_Literal;
+struct C_Literal
+{
+  C_Literal_Type  type;
+  C_Literal_Flags flags;
+
+  union
+  {
+    u8  character;
+    String string;
+    struct
+    {
+      u8  base;
+      u64 v;
+    } integer;
+    f64 floating;
+  };
+};
 
 typedef struct C_Token C_Token;
 struct C_Token
 {
   C_Token_Type  type;
-  C_Token_Flags flags;
 
   String raw;
   usize  line;
   usize  column;
 
-  union
-  {
-    String string_literal;
-    struct
-    {
-      u8  base;
-      u64 v;
-    } int_literal;
-    u8  char_literal;
-    f64 float_literal;
-  };
+  C_Literal literal;
 };
 
 typedef struct C_Lexer C_Lexer;

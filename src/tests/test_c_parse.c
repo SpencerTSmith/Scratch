@@ -164,8 +164,8 @@ int main(int argc, char **argv)
         // "int call = func2(a, a + b, func());\n"
         // "int ref = &a + 1;\n"
         // "int ref = &a;\n"
-        // "int tern = a ? b : c ? d : e;\n"
-        "int tern = a + b ? c : d;\n"
+        "int tern = a ? b : c ? d : e;\n"
+        // "int tern = a + b ? c : d;\n"
       );
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);

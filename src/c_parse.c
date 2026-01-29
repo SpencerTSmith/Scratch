@@ -317,7 +317,7 @@ C_Node *c_parse_variable(Arena *arena, C_Parser *parser)
   return result;
 }
 
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence);
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser);
 
 C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 {
@@ -340,7 +340,7 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 
       while (!c_parse_current_is(*parser, C_TOKEN_CLOSE_PARENTHESIS))
       {
-        C_Node *argument = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+        C_Node *argument = c_parse_expression(arena, parser);
         c_node_add_child(result, argument);
 
         // Skip comma
@@ -414,7 +414,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     parser->at += 1;
 
     // Reset as if this expression is all by itself by passing the min precedence
-    result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    result = c_parse_expression(arena, parser);
 
     if (!c_parse_current_is(*parser, C_TOKEN_CLOSE_PARENTHESIS))
     {
@@ -448,7 +448,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
   return result;
 }
 
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
+C_Node *c_parse_binary_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 {
   C_Node *left = c_parse_expression_start(arena, parser);
 
@@ -475,7 +475,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 
         parser->at += 1;
 
-        C_Node *right = c_parse_expression(arena, parser, new_precedence);
+        C_Node *right = c_parse_binary_expression(arena, parser, new_precedence);
 
         c_node_add_child(result, left);
         c_node_add_child(result, right);
@@ -497,11 +497,19 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
     left = result;
   }
 
+  return result;
+}
+
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser)
+{
+  // By default just a binary expression.
+  C_Node *result = c_parse_binary_expression(arena, parser, C_MIN_PRECEDENCE);
+
   C_Token post_peek = c_parse_peek_token(*parser, 0);
 
   // Check for ternary if we are the root of an expression, i.e. we were called with the absolute minimum precedence,
   // if so grab it, rebuild result tree
-  if (min_precedence == C_MIN_PRECEDENCE && post_peek.type == C_TOKEN_QUESTION)
+  if (post_peek.type == C_TOKEN_QUESTION)
   {
     parser->at += 1;
 
@@ -513,7 +521,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 
     c_node_add_child(result, condition);
 
-    C_Node *true_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    C_Node *true_expression = c_parse_expression(arena, parser);
     c_node_add_child(result, true_expression);
 
     if (!c_parse_current_is(*parser, C_TOKEN_COLON))
@@ -525,7 +533,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
       parser->at += 1;
     }
 
-    C_Node *false_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    C_Node *false_expression = c_parse_expression(arena, parser);
     c_node_add_child(result, false_expression);
   }
 
@@ -572,7 +580,7 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
     // Skip euqals sign
     parser->at += 1;
 
-    C_Node *expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    C_Node *expression = c_parse_expression(arena, parser);
     c_node_add_child(result, expression); // Third child is initializing expression, if present
   }
 

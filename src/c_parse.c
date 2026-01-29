@@ -454,7 +454,6 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
     // Now left hand side becomes this new tree
     left = result;
   }
-#endif
 
   return result;
 }

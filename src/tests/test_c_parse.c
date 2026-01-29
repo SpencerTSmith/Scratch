@@ -27,7 +27,7 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
 
     if (depth != 0)
     {
-      printf(">");
+      printf("> ");
     }
 
     switch (node->type)
@@ -97,6 +97,8 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
           case C_BINARY_GREATER_THAN_EQUAL: { printf(">="); } break;
           case C_BINARY_LOGICAL_AND:        { printf("&&"); } break;
           case C_BINARY_LOGICAL_OR:         { printf("||"); } break;
+          case C_BINARY_LEFT_SHIFT:         { printf("<<"); } break;
+          case C_BINARY_RIGHT_SHIFT:        { printf(">>"); } break;
         }
       }
       break;
@@ -154,6 +156,7 @@ int main(int argc, char **argv)
         // "int baz = -(1 + 1);\n"
         // "int boo = 1 + 3 + 1;\n"
         // "int boo = 1 * 3 + 1;\n"
+        "int shift = 1 << 2;"
         // "int ban = bar++;\n"
         // // "int ban = ++bar;\n"
         // "int ban = bar--;\n"
@@ -164,7 +167,7 @@ int main(int argc, char **argv)
         // "int call = func2(a, a + b, func());\n"
         // "int ref = &a + 1;\n"
         // "int ref = &a;\n"
-        "int tern = a ? b : c ? d : e;\n"
+        // "int tern = a ? b : c ? d : e;\n"
         // "int tern = a + b ? c : d;\n"
       );
 

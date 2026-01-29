@@ -17,7 +17,7 @@
 //   - Compound literals
 //   - Array access
 //   - Assignment operators
-//   - Ternary
+//   - Comma operator
 
 #define C_Node_Type(X)           \
   X(C_NODE_NONE)                 \
@@ -40,26 +40,27 @@ typedef enum C_Binary
 {
   C_BINARY_NONE,
 
-  C_BINARY_ADD,
-  C_BINARY_SUBTRACT,
+  C_BINARY_ACCESS,
+  C_BINARY_POINTER_ACCESS,
+  C_BINARY_ARRAY_ACCESS,
   C_BINARY_MULTIPLY,
   C_BINARY_DIVIDE,
   C_BINARY_MODULO,
-  C_BINARY_XOR,
-  C_BINARY_BITWISE_AND,
-  C_BINARY_BITWISE_OR,
-  C_BINARY_ACCESS,
-  C_BINARY_POINTER_ACCESS,
-  C_BINARY_COMPARE_EQUAL,
-  C_BINARY_COMPARE_NOT_EQUAL,
+  C_BINARY_ADD,
+  C_BINARY_SUBTRACT,
+  C_BINARY_LEFT_SHIFT,
+  C_BINARY_RIGHT_SHIFT,
   C_BINARY_LESS_THAN,
   C_BINARY_LESS_THAN_EQUAL,
   C_BINARY_GREATER_THAN,
   C_BINARY_GREATER_THAN_EQUAL,
+  C_BINARY_COMPARE_EQUAL,
+  C_BINARY_COMPARE_NOT_EQUAL,
+  C_BINARY_BITWISE_AND,
+  C_BINARY_XOR,
+  C_BINARY_BITWISE_OR,
   C_BINARY_LOGICAL_AND,
   C_BINARY_LOGICAL_OR,
-  C_BINARY_LEFT_SHIFT,
-  C_BINARY_RIGHT_SHIFT,
 
   C_BINARY_COUNT,
 } C_Binary;
@@ -73,6 +74,7 @@ typedef enum C_Unary
   C_UNARY_POST_INCREMENT,
   C_UNARY_POST_DECREMENT,
   C_UNARY_NEGATE,
+  C_UNARY_PLUS,
   C_UNARY_REFERENCE,
   C_UNARY_DEREFERENCE,
   C_UNARY_BITWISE_NOT,
@@ -111,7 +113,55 @@ struct C_Parser
   usize at;
 };
 
+typedef struct C_Token_Node_Mappings C_Token_Node_Mappings;
+struct C_Token_Node_Mappings
+{
+  C_Unary  unary;
+  C_Binary binary;
+};
+
+static
+C_Token_Node_Mappings token_to_node_table[] =
+{
+  [C_TOKEN_MINUS]              = { C_UNARY_NEGATE,        C_BINARY_SUBTRACT },
+  [C_TOKEN_STAR]               = { C_UNARY_DEREFERENCE,   C_BINARY_MULTIPLY },
+  [C_TOKEN_INCREMENT]          = { C_UNARY_PRE_INCREMENT, C_BINARY_NONE }, // NOTE: Special-case
+  [C_TOKEN_DECREMENT]          = { C_UNARY_PRE_DECREMENT, C_BINARY_NONE }, // NOTE: Special-case
+  [C_TOKEN_ADD]                = { C_UNARY_PLUS,          C_BINARY_ADD },
+  [C_TOKEN_BITWISE_AND]        = { C_UNARY_REFERENCE,     C_BINARY_BITWISE_AND},
+  [C_TOKEN_BITWISE_NOT]        = { C_UNARY_BITWISE_NOT,   C_BINARY_NONE },
+  [C_TOKEN_LOGICAL_NOT]        = { C_UNARY_LOGICAL_NOT,   C_BINARY_NONE },
+  [C_TOKEN_LEFT_SHIFT]         = { C_UNARY_NONE,          C_BINARY_LEFT_SHIFT },
+  [C_TOKEN_RIGHT_SHIFT]        = { C_UNARY_NONE,          C_BINARY_RIGHT_SHIFT },
+  [C_TOKEN_BITWISE_OR]         = { C_UNARY_NONE,          C_BINARY_BITWISE_OR},
+  [C_TOKEN_XOR]                = { C_UNARY_NONE,          C_BINARY_XOR },
+  [C_TOKEN_DOT]                = { C_UNARY_NONE,          C_BINARY_ACCESS },
+  [C_TOKEN_ARROW]              = { C_UNARY_NONE,          C_BINARY_POINTER_ACCESS },
+  [C_TOKEN_COMPARE_EQUAL]      = { C_UNARY_NONE,          C_BINARY_COMPARE_EQUAL },
+  [C_TOKEN_COMPARE_NOT_EQUAL]  = { C_UNARY_NONE,          C_BINARY_COMPARE_NOT_EQUAL },
+  [C_TOKEN_LESS_THAN]          = { C_UNARY_NONE,          C_BINARY_LESS_THAN },
+  [C_TOKEN_LESS_THAN_EQUAL]    = { C_UNARY_NONE,          C_BINARY_LESS_THAN_EQUAL },
+  [C_TOKEN_GREATER_THAN]       = { C_UNARY_NONE,          C_BINARY_GREATER_THAN },
+  [C_TOKEN_GREATER_THAN_EQUAL] = { C_UNARY_NONE,          C_BINARY_GREATER_THAN_EQUAL },
+  [C_TOKEN_LOGICAL_AND]        = { C_UNARY_NONE,          C_BINARY_LOGICAL_AND },
+  [C_TOKEN_LOGICAL_OR]         = { C_UNARY_NONE,          C_BINARY_LOGICAL_OR },
+};
+
+static
+C_Token_Node_Mappings c_token_to_node_mapping(C_Token_Type type)
+{
+  C_Token_Node_Mappings result = {0};
+
+  if (type > 0 && type < STATIC_COUNT(token_to_node_table))
+  {
+    result = token_to_node_table[type];
+  }
+
+  return result;
+}
+
 // Could easily convert these to lookups
+static
 b32 c_token_is_type_keyword(C_Token token)
 {
   C_Token_Type t = token.type;
@@ -127,103 +177,53 @@ b32 c_token_is_type_keyword(C_Token token)
   return result;
 }
 
+static
 b32 c_token_is_unary_operator(C_Token token)
 {
-  C_Token_Type t = token.type;
-
-  // Apparently add is also a unary?
-  b32 result = t == C_TOKEN_MINUS       ||
-               t == C_TOKEN_STAR        ||
-               t == C_TOKEN_INCREMENT   ||
-               t == C_TOKEN_DECREMENT   ||
-               t == C_TOKEN_ADD         ||
-               t == C_TOKEN_BITWISE_AND ||
-               t == C_TOKEN_BITWISE_NOT ||
-               t == C_TOKEN_LOGICAL_NOT;
+  b32 result = c_token_to_node_mapping(token.type).unary != C_UNARY_NONE;
 
   return result;
 }
 
-// TODO: account for comma operator... perhaps a flag if we are within a parenthetical
+static
 b32 c_token_is_binary_operator(C_Token token)
 {
-  C_Token_Type t = token.type;
-
-  b32 result = t == C_TOKEN_STAR               ||
-               t == C_TOKEN_ADD                ||
-               t == C_TOKEN_MINUS              ||
-               t == C_TOKEN_DIVIDE             ||
-               t == C_TOKEN_MODULO             ||
-               t == C_TOKEN_XOR                ||
-               t == C_TOKEN_BITWISE_AND        ||
-               t == C_TOKEN_BITWISE_OR         ||
-               t == C_TOKEN_DOT                ||
-               t == C_TOKEN_ARROW              ||
-               t == C_TOKEN_COMPARE_EQUAL      ||
-               t == C_TOKEN_LESS_THAN          ||
-               t == C_TOKEN_LESS_THAN_EQUAL    ||
-               t == C_TOKEN_GREATER_THAN       ||
-               t == C_TOKEN_GREATER_THAN_EQUAL ||
-               t == C_TOKEN_COMPARE_NOT_EQUAL  ||
-               t == C_TOKEN_LOGICAL_AND        ||
-               t == C_TOKEN_LOGICAL_OR;
-
+  b32 result = c_token_to_node_mapping(token.type).binary != C_BINARY_NONE;
 
   return result;
 }
 
 // Feels like there is a way to do this wihout repeating self so much
+static
 C_Binary c_token_to_binary(C_Token token)
 {
-  C_Binary result = C_BINARY_NONE;
-
-  switch (token.type)
-  {
-    default: { LOG_ERROR("Unable to convert token to binary"); } break;
-    case C_TOKEN_STAR:               { result = C_BINARY_MULTIPLY; } break;
-    case C_TOKEN_ADD:                { result = C_BINARY_ADD; } break;
-    case C_TOKEN_MINUS:              { result = C_BINARY_ADD; } break;
-    case C_TOKEN_DIVIDE:             { result = C_BINARY_DIVIDE; } break;
-    case C_TOKEN_MODULO:             { result = C_BINARY_MODULO; } break;
-    case C_TOKEN_XOR:                { result = C_BINARY_XOR; } break;
-    case C_TOKEN_BITWISE_AND:        { result = C_BINARY_BITWISE_AND; } break;
-    case C_TOKEN_BITWISE_OR:         { result = C_BINARY_BITWISE_OR; }  break;
-    case C_TOKEN_DOT:                { result = C_BINARY_ACCESS; } break;
-    case C_TOKEN_ARROW:              { result = C_BINARY_POINTER_ACCESS; } break;
-    case C_TOKEN_COMPARE_EQUAL:      { result = C_BINARY_COMPARE_EQUAL; } break;
-    case C_TOKEN_LESS_THAN:          { result = C_BINARY_LESS_THAN; } break;
-    case C_TOKEN_LESS_THAN_EQUAL:    { result = C_BINARY_LESS_THAN_EQUAL; } break;
-    case C_TOKEN_GREATER_THAN:       { result = C_BINARY_GREATER_THAN; } break;
-    case C_TOKEN_GREATER_THAN_EQUAL: { result = C_BINARY_GREATER_THAN_EQUAL; } break;
-    case C_TOKEN_COMPARE_NOT_EQUAL:  { result = C_BINARY_COMPARE_NOT_EQUAL; } break;
-    case C_TOKEN_LOGICAL_AND:        { result = C_BINARY_LOGICAL_OR; } break;
-    case C_TOKEN_LOGICAL_OR:         { result = C_BINARY_LOGICAL_AND; } break;
-    case C_TOKEN_LEFT_SHIFT:         { result = C_BINARY_LEFT_SHIFT; } break;
-    case C_TOKEN_RIGHT_SHIFT:        { result = C_BINARY_RIGHT_SHIFT;  } break;
-  }
+  C_Binary result = c_token_to_node_mapping(token.type).binary;
 
   return result;
 }
 
+static
 C_Unary c_token_to_unary(C_Token token, b32 is_post)
 {
-  C_Unary result = C_UNARY_NONE;
+  C_Unary result = c_token_to_node_mapping(token.type).unary;
 
-  switch (token.type)
+  // Special case for post increment and decrement
+  if (is_post)
   {
-    default: { LOG_ERROR("Unable to convert token to unary"); } break;
-    case C_TOKEN_STAR:               { result = C_UNARY_DEREFERENCE; } break;
-    case C_TOKEN_MINUS:              { result = C_UNARY_NEGATE; } break;
-    case C_TOKEN_BITWISE_AND:        { result = C_UNARY_REFERENCE; } break;
-    case C_TOKEN_BITWISE_NOT:        { result = C_UNARY_BITWISE_NOT; }  break;
-    case C_TOKEN_LOGICAL_NOT:        { result = C_UNARY_LOGICAL_NOT; } break;
-    case C_TOKEN_INCREMENT:          { result = is_post ? C_UNARY_POST_INCREMENT : C_UNARY_PRE_INCREMENT; } break;
-    case C_TOKEN_DECREMENT:          { result = is_post ? C_UNARY_POST_DECREMENT : C_UNARY_PRE_DECREMENT; } break;
+    if (result == C_UNARY_PRE_DECREMENT)
+    {
+      result = C_UNARY_POST_INCREMENT;
+    }
+    else if (result == C_UNARY_PRE_DECREMENT)
+    {
+      result = C_UNARY_POST_DECREMENT;
+    }
   }
 
   return result;
 }
 
+static
 i32 c_binary_precedence(C_Binary binary)
 {
   i32 result = C_MIN_PRECEDENCE;
@@ -256,6 +256,7 @@ i32 c_binary_precedence(C_Binary binary)
   return result;
 }
 
+static
 C_Token c_parse_peek_token(C_Parser parser, isize offset)
 {
   C_Token result = {0};
@@ -268,11 +269,13 @@ C_Token c_parse_peek_token(C_Parser parser, isize offset)
   return result;
 }
 
+static
 b32 c_parse_current_is(C_Parser parser, C_Token_Type type)
 {
   return c_parse_peek_token(parser, 0).type == type;
 }
 
+static
 void c_node_add_child(C_Node *parent, C_Node *child)
 {
   child->parent = parent;
@@ -281,11 +284,13 @@ void c_node_add_child(C_Node *parent, C_Node *child)
   parent->child_count += 1;
 }
 
+static
 b32 c_parse_incomplete(C_Parser parser)
 {
   return parser.at < parser.tokens.count;
 }
 
+static
 C_Node *c_nil_node()
 {
   static C_Node nil = {0};
@@ -293,6 +298,7 @@ C_Node *c_nil_node()
   return &nil;
 }
 
+static
 C_Node *c_parse_variable(Arena *arena, C_Parser *parser)
 {
   C_Node *result = arena_new(arena, C_Node);
@@ -317,8 +323,10 @@ C_Node *c_parse_variable(Arena *arena, C_Parser *parser)
   return result;
 }
 
+static
 C_Node *c_parse_expression(Arena *arena, C_Parser *parser);
 
+static
 C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_nil_node();
@@ -367,6 +375,7 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 
 // TODO: Better name... basically just capture the part that would act like a leaf of a tree...  but not a real leaf as with parentheses
 // this will could potentially be a rather large subtree acting like a leaf
+static
 C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 {
   C_Token token = c_parse_peek_token(*parser, 0);
@@ -448,6 +457,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
   return result;
 }
 
+static
 C_Node *c_parse_binary_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 {
   C_Node *left = c_parse_expression_start(arena, parser);
@@ -500,6 +510,7 @@ C_Node *c_parse_binary_expression(Arena *arena, C_Parser *parser, i32 min_preced
   return result;
 }
 
+static
 C_Node *c_parse_expression(Arena *arena, C_Parser *parser)
 {
   // By default just a binary expression.
@@ -540,6 +551,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser)
   return result;
 }
 
+static
 C_Node *c_parse_type(Arena *arena, C_Parser *parser)
 {
   C_Node *result = arena_new(arena, C_Node);
@@ -562,6 +574,7 @@ C_Node *c_parse_type(Arena *arena, C_Parser *parser)
   return result;
 }
 
+static
 C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
 {
   C_Node *result = arena_new(arena, C_Node);
@@ -597,6 +610,7 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
   return result;
 }
 
+static
 C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser)
 {
   return 0;

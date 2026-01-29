@@ -125,6 +125,11 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
         printf("%.*s", STRF(node->name));
       }
       break;
+      case C_NODE_FUNCTION_CALL:
+      {
+        printf("CALL - %.*s", STRF(node->name));
+      }
+      break;
     }
     printf("\n");
 
@@ -153,8 +158,14 @@ int main(int argc, char **argv)
         // // "int ban = ++bar;\n"
         // "int ban = bar--;\n"
         // "int par = 1 + (1 + 1) + (1 + 1);\n"
-        "int par = 1 + (1 + 1) + bar++;\n"
-        // "int prec = a > b + c * d + e;"
+        // "int par = 1 + (1 + 1) + bar++;\n"
+        // "int prec = a > b + c * d + e;\n"
+        // "int call = func();\n"
+        // "int call = func2(a, a + b, func());\n"
+        // "int ref = &a + 1;\n"
+        // "int ref = &a;\n"
+        // "int tern = a ? b : c ? d : e;\n"
+        "int tern = a + b ? c : d;\n"
       );
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);

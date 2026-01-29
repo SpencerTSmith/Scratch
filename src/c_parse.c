@@ -14,11 +14,10 @@
 //   - switch
 //   - do while
 // - Expressions
-//   - Precedence
 //   - Compound literals
 //   - Array access
-//   - Function calls
 //   - Assignment operators
+//   - Ternary
 
 #define C_Node_Type(X)           \
   X(C_NODE_NONE)                 \
@@ -29,6 +28,8 @@
   X(C_NODE_VARIABLE_DECLARATION) \
   X(C_NODE_UNARY)                \
   X(C_NODE_BINARY)               \
+  X(C_NODE_TERNARY)              \
+  X(C_NODE_FUNCTION_CALL)        \
   X(C_NODE_COUNT)
 
 ENUM_TABLE(C_Node_Type);
@@ -171,11 +172,6 @@ b32 c_token_is_binary_operator(C_Token token)
   return result;
 }
 
-void c_parse_error(usize line, const char *message)
-{
-  LOG_ERROR("[Line: %llu] %s", line, message);
-}
-
 // Feels like there is a way to do this wihout repeating self so much
 C_Binary c_token_to_binary(C_Token token)
 {
@@ -272,7 +268,7 @@ C_Token c_parse_peek_token(C_Parser parser, isize offset)
   return result;
 }
 
-b32 c_parse_expect(C_Parser parser, C_Token_Type type)
+b32 c_parse_current_is(C_Parser parser, C_Token_Type type)
 {
   return c_parse_peek_token(parser, 0).type == type;
 }
@@ -321,13 +317,53 @@ C_Node *c_parse_variable(Arena *arena, C_Parser *parser)
   return result;
 }
 
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence);
+
 C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 {
-  // TODO:
-  return 0;
-}
+  C_Node *result = c_nil_node();
 
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence);
+  C_Token identifier = c_parse_peek_token(*parser, 0);
+
+  if (identifier.type == C_TOKEN_IDENTIFIER)
+  {
+    result = arena_new(arena, C_Node);
+
+    result->type = C_NODE_FUNCTION_CALL;
+    result->name = identifier.raw;
+
+    parser->at += 1;
+
+    if (c_parse_current_is(*parser, C_TOKEN_BEGIN_PARENTHESIS))
+    {
+      parser->at += 1;
+
+      while (!c_parse_current_is(*parser, C_TOKEN_CLOSE_PARENTHESIS))
+      {
+        C_Node *argument = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+        c_node_add_child(result, argument);
+
+        // Skip comma
+        if (c_parse_current_is(*parser, C_TOKEN_COMMA))
+        {
+          parser->at += 1;
+        }
+      }
+
+      parser->at += 1; // skip the final parenthesis
+    }
+    else
+    {
+      LOG_ERROR("Expected function call to have open parenthesis");
+    }
+  }
+  else
+  {
+    LOG_ERROR("Expected function call to begin with identifier");
+  }
+
+  return result;
+}
 
 // TODO: Better name... basically just capture the part that would act like a leaf of a tree...  but not a real leaf as with parentheses
 // this will could potentially be a rather large subtree acting like a leaf
@@ -362,7 +398,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
   }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {
-    C_Token peek = c_parse_peek_token(*parser, 0);
+    C_Token peek = c_parse_peek_token(*parser, 1);
 
     if (peek.type != C_TOKEN_BEGIN_PARENTHESIS)
     {
@@ -377,9 +413,10 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
   {
     parser->at += 1;
 
+    // Reset as if this expression is all by itself by passing the min precedence
     result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
 
-    if (!c_parse_expect(*parser, C_TOKEN_CLOSE_PARENTHESIS))
+    if (!c_parse_current_is(*parser, C_TOKEN_CLOSE_PARENTHESIS))
     {
       LOG_ERROR("Expected close parenthesis");
     }
@@ -389,9 +426,10 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     }
   }
 
+  C_Token post_peek = c_parse_peek_token(*parser, 0);
+
   // Check if we have a post unary operator, rebuild result tree if so
-  C_Token post_unary_peek = c_parse_peek_token(*parser, 0);
-  if (post_unary_peek.type == C_TOKEN_INCREMENT || post_unary_peek.type == C_TOKEN_DECREMENT)
+  if (post_peek.type == C_TOKEN_INCREMENT || post_peek.type == C_TOKEN_DECREMENT)
   {
     // Save the old as we need to reattach as a child of the unary
     C_Node *save = result;
@@ -400,7 +438,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     result->type = C_NODE_UNARY;
 
     b32 is_post = true;
-    result->unary = c_token_to_unary(post_unary_peek, true);
+    result->unary = c_token_to_unary(post_peek, true);
 
     parser->at += 1;
 
@@ -451,12 +489,44 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
     }
     else
     {
-      // No more operators, we are done.
+      // No more binary operators, we are done.
       break;
     }
 
     // Now left hand side becomes this new tree
     left = result;
+  }
+
+  C_Token post_peek = c_parse_peek_token(*parser, 0);
+
+  // Check for ternary if we are the root of an expression, i.e. we were called with the absolute minimum precedence,
+  // if so grab it, rebuild result tree
+  if (min_precedence == C_MIN_PRECEDENCE && post_peek.type == C_TOKEN_QUESTION)
+  {
+    parser->at += 1;
+
+    // We know what we have so far is the condition for the ternary.
+    C_Node *condition = result;
+
+    result = arena_new(arena, C_Node);
+    result->type = C_NODE_TERNARY;
+
+    c_node_add_child(result, condition);
+
+    C_Node *true_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    c_node_add_child(result, true_expression);
+
+    if (!c_parse_current_is(*parser, C_TOKEN_COLON))
+    {
+      LOG_ERROR("Expected colon after 2nd ternary argument.");
+    }
+    else
+    {
+      parser->at += 1;
+    }
+
+    C_Node *false_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    c_node_add_child(result, false_expression);
   }
 
   return result;
@@ -513,8 +583,7 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
   }
   else
   {
-    c_parse_error(c_parse_peek_token(*parser, -1).line,
-                  "Declaration without subsequent semicolon");
+    LOG_ERROR("Declaration without subsequent semicolon");
   }
 
   return result;

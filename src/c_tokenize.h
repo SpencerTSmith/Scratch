@@ -17,6 +17,8 @@
   X(C_TOKEN_DIVIDE)                     \
   X(C_TOKEN_MODULO)                     \
   X(C_TOKEN_XOR)                        \
+  X(C_TOKEN_LEFT_SHIFT)                 \
+  X(C_TOKEN_RIGHT_SHIFT)                \
   X(C_TOKEN_BITWISE_AND)                \
   X(C_TOKEN_BITWISE_OR)                 \
   X(C_TOKEN_ASSIGN)                     \
@@ -28,6 +30,8 @@
   X(C_TOKEN_AND_ASSIGN)                 \
   X(C_TOKEN_OR_ASSIGN)                  \
   X(C_TOKEN_XOR_ASSIGN)                 \
+  X(C_TOKEN_LEFT_SHIFT_ASSIGN)          \
+  X(C_TOKEN_RIGHT_SHIFT_ASSIGN)         \
   X(C_TOKEN_COMMA)                      \
   X(C_TOKEN_SEMICOLON)                  \
   X(C_TOKEN_DOT)                        \

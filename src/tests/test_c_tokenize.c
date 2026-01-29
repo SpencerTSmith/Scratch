@@ -133,8 +133,8 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Assignment operators"))
   {
-    C_Token_Array tokens = tokenize_c_code(&arena, STR("+= -= *= /= %= &= |= ^="));
-    TEST_EVAL(tokens.count == 8);
+    C_Token_Array tokens = tokenize_c_code(&arena, STR("+= -= *= /= %= &= |= ^= <<= >>="));
+    TEST_EVAL(tokens.count == 10);
     TEST_EVAL(tokens.v[0].type == C_TOKEN_ADD_ASSIGN);
     TEST_EVAL(tokens.v[1].type == C_TOKEN_SUBTRACT_ASSIGN);
     TEST_EVAL(tokens.v[2].type == C_TOKEN_MULTIPLY_ASSIGN);
@@ -143,6 +143,8 @@ int main(int argc, char **argv)
     TEST_EVAL(tokens.v[5].type == C_TOKEN_AND_ASSIGN);
     TEST_EVAL(tokens.v[6].type == C_TOKEN_OR_ASSIGN);
     TEST_EVAL(tokens.v[7].type == C_TOKEN_XOR_ASSIGN);
+    TEST_EVAL(tokens.v[8].type == C_TOKEN_LEFT_SHIFT_ASSIGN);
+    TEST_EVAL(tokens.v[9].type == C_TOKEN_RIGHT_SHIFT_ASSIGN);
 
     arena_clear(&arena);
   }

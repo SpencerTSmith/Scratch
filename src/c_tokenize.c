@@ -18,8 +18,7 @@ void c_lexer_push_token(Arena *arena, C_Token_Chunk_List *list, C_Token token)
 
 // Single character tokens... some special logic required for e.g. =,&,| (could be ==,&&,||)
 // In those cases we check and then grab the 2nd token type of the triple
-// As well for operation assignment tokens (+=, -=, &=, etc.)
-// We use the 3rd of the triple
+// As well for operation assignment tokens (+=, -=, &=, etc.) we use the 3rd of the triple
 static C_Token_Type c_token_table[][3] =
 {
   ['('] = {C_TOKEN_BEGIN_PARENTHESIS,  C_TOKEN_NONE,          C_TOKEN_NONE},
@@ -43,8 +42,8 @@ static C_Token_Type c_token_table[][3] =
   [';'] = {C_TOKEN_SEMICOLON,          C_TOKEN_NONE,          C_TOKEN_NONE},
   ['.'] = {C_TOKEN_DOT,                C_TOKEN_NONE,          C_TOKEN_NONE},
 
-  ['<'] = {C_TOKEN_LESS_THAN,          C_TOKEN_NONE,          C_TOKEN_LESS_THAN_EQUAL},
-  ['>'] = {C_TOKEN_GREATER_THAN,       C_TOKEN_NONE,          C_TOKEN_GREATER_THAN_EQUAL},
+  ['<'] = {C_TOKEN_LESS_THAN,          C_TOKEN_LEFT_SHIFT,    C_TOKEN_LESS_THAN_EQUAL},
+  ['>'] = {C_TOKEN_GREATER_THAN,       C_TOKEN_RIGHT_SHIFT,   C_TOKEN_GREATER_THAN_EQUAL},
   ['!'] = {C_TOKEN_LOGICAL_NOT,        C_TOKEN_NONE,          C_TOKEN_COMPARE_NOT_EQUAL},
 
   ['?'] = {C_TOKEN_QUESTION,           C_TOKEN_NONE,          C_TOKEN_NONE},
@@ -310,7 +309,9 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
     if (token.type != C_TOKEN_NONE) // Match from the table!
     {
-      b32 could_be_arrow  = c_token_table[curr_char][0] == C_TOKEN_MINUS; // only ->
+      b32 could_be_arrow         = curr_char == '-';                      // only ->
+      b32 could_be_double_equals = curr_char == '>' || curr_char == '<';  // only <<= and >>=
+
       b32 could_be_double = c_token_table[curr_char][1] != C_TOKEN_NONE;  // e.g. &&
       b32 could_be_equals = c_token_table[curr_char][2] != C_TOKEN_NONE;  // e.g. &=
 
@@ -321,8 +322,16 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
 
         if (could_be_double && next_char == curr_char)
         {
-          token.type = c_token_table[curr_char][1];
-          token_length = 2;
+          if (could_be_double_equals && c_lexer_peek_at(lexer, lexer.at + 2) == '=')
+          {
+            token.type = curr_char == '<' ? C_TOKEN_LEFT_SHIFT_ASSIGN : C_TOKEN_RIGHT_SHIFT_ASSIGN;
+            token_length = 3;
+          }
+          else
+          {
+            token.type = c_token_table[curr_char][1];
+            token_length = 2;
+          }
         }
         else if (could_be_equals && next_char == '=')
         {

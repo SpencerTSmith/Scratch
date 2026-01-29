@@ -5,6 +5,21 @@
 
 #include "c_tokenize.h"
 
+// TODO:
+// - Statements
+//   - Blocks
+//   - for
+//   - while
+//   - if
+//   - switch
+//   - do while
+// - Expressions
+//   - Precedence
+//   - Compound literals
+//   - Array access
+//   - Function calls
+//   - Assignment operators
+
 #define C_Node_Type(X)           \
   X(C_NODE_NONE)                 \
   X(C_NODE_VARIABLE)             \
@@ -18,6 +33,8 @@
 
 ENUM_TABLE(C_Node_Type);
 
+#define C_MIN_PRECEDENCE INT32_MIN
+
 typedef enum C_Binary
 {
   C_BINARY_NONE,
@@ -30,8 +47,8 @@ typedef enum C_Binary
   C_BINARY_XOR,
   C_BINARY_BITWISE_AND,
   C_BINARY_BITWISE_OR,
-  C_BINARY_DOT,
-  C_BINARY_ARROW,
+  C_BINARY_ACCESS,
+  C_BINARY_POINTER_ACCESS,
   C_BINARY_COMPARE_EQUAL,
   C_BINARY_COMPARE_NOT_EQUAL,
   C_BINARY_LESS_THAN,
@@ -40,6 +57,8 @@ typedef enum C_Binary
   C_BINARY_GREATER_THAN_EQUAL,
   C_BINARY_LOGICAL_AND,
   C_BINARY_LOGICAL_OR,
+  C_BINARY_LEFT_SHIFT,
+  C_BINARY_RIGHT_SHIFT,
 
   C_BINARY_COUNT,
 } C_Binary;
@@ -173,8 +192,8 @@ C_Binary c_token_to_binary(C_Token token)
     case C_TOKEN_XOR:                { result = C_BINARY_XOR; } break;
     case C_TOKEN_BITWISE_AND:        { result = C_BINARY_BITWISE_AND; } break;
     case C_TOKEN_BITWISE_OR:         { result = C_BINARY_BITWISE_OR; }  break;
-    case C_TOKEN_DOT:                { result = C_BINARY_DOT; } break;
-    case C_TOKEN_ARROW:              { result = C_BINARY_ARROW; } break;
+    case C_TOKEN_DOT:                { result = C_BINARY_ACCESS; } break;
+    case C_TOKEN_ARROW:              { result = C_BINARY_POINTER_ACCESS; } break;
     case C_TOKEN_COMPARE_EQUAL:      { result = C_BINARY_COMPARE_EQUAL; } break;
     case C_TOKEN_LESS_THAN:          { result = C_BINARY_LESS_THAN; } break;
     case C_TOKEN_LESS_THAN_EQUAL:    { result = C_BINARY_LESS_THAN_EQUAL; } break;
@@ -183,6 +202,8 @@ C_Binary c_token_to_binary(C_Token token)
     case C_TOKEN_COMPARE_NOT_EQUAL:  { result = C_BINARY_COMPARE_NOT_EQUAL; } break;
     case C_TOKEN_LOGICAL_AND:        { result = C_BINARY_LOGICAL_OR; } break;
     case C_TOKEN_LOGICAL_OR:         { result = C_BINARY_LOGICAL_AND; } break;
+    case C_TOKEN_LEFT_SHIFT:         { result = C_BINARY_LEFT_SHIFT; } break;
+    case C_TOKEN_RIGHT_SHIFT:        { result = C_BINARY_RIGHT_SHIFT;  } break;
   }
 
   return result;
@@ -209,7 +230,32 @@ C_Unary c_token_to_unary(C_Token token, b32 is_post)
 
 i32 c_binary_precedence(C_Binary binary)
 {
-  i32 result = INT32_MIN;
+  i32 result = C_MIN_PRECEDENCE;
+
+  switch (binary)
+  {
+    default: { LOG_ERROR("Tried to attain precedence for invalid binary operator"); } break;
+    case C_BINARY_ACCESS:             { result = 14; } break;
+    case C_BINARY_POINTER_ACCESS:     { result = 14; } break;
+    case C_BINARY_MULTIPLY:           { result = 12; } break;
+    case C_BINARY_DIVIDE:             { result = 12; } break;
+    case C_BINARY_MODULO:             { result = 12; } break;
+    case C_BINARY_ADD:                { result = 11; } break;
+    case C_BINARY_SUBTRACT:           { result = 11; } break;
+    case C_BINARY_LEFT_SHIFT:         { result = 10; } break;
+    case C_BINARY_RIGHT_SHIFT:        { result = 10; } break;
+    case C_BINARY_LESS_THAN:          { result = 9; } break;
+    case C_BINARY_LESS_THAN_EQUAL:    { result = 9; } break;
+    case C_BINARY_GREATER_THAN:       { result = 9; } break;
+    case C_BINARY_GREATER_THAN_EQUAL: { result = 9; } break;
+    case C_BINARY_COMPARE_EQUAL:      { result = 8; } break;
+    case C_BINARY_COMPARE_NOT_EQUAL:  { result = 8; } break;
+    case C_BINARY_BITWISE_AND:        { result = 7; } break;
+    case C_BINARY_XOR:                { result = 6; } break;
+    case C_BINARY_BITWISE_OR:         { result = 5; } break;
+    case C_BINARY_LOGICAL_AND:        { result = 4; } break;
+    case C_BINARY_LOGICAL_OR:         { result = 3; } break;
+  }
 
   return result;
 }
@@ -235,11 +281,8 @@ void c_node_add_child(C_Node *parent, C_Node *child)
 {
   child->parent = parent;
 
-  if (parent)
-  {
-    DLL_push_last(parent->first_child, parent->last_child, child, next_sibling, prev_sibling);
-    parent->child_count += 1;
-  }
+  DLL_push_last(parent->first_child, parent->last_child, child, next_sibling, prev_sibling);
+  parent->child_count += 1;
 }
 
 b32 c_parse_incomplete(C_Parser parser)
@@ -278,7 +321,13 @@ C_Node *c_parse_variable(Arena *arena, C_Parser *parser)
   return result;
 }
 
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser);
+C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
+{
+  // TODO:
+  return 0;
+}
+
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence);
 
 // TODO: Better name... basically just capture the part that would act like a leaf of a tree...  but not a real leaf as with parentheses
 // this will could potentially be a rather large subtree acting like a leaf
@@ -307,8 +356,9 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 
     parser->at += 1;
 
-    C_Node *expression = c_parse_expression_start(arena, parser);
-    c_node_add_child(result, expression);
+    // Only parse a single 'thing', i.e. recurse so we only parse a larger expression if parenthesis
+    C_Node *child = c_parse_expression_start(arena, parser);
+    c_node_add_child(result, child);
   }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {
@@ -320,14 +370,14 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     }
     else
     {
-      // TODO: Function call
+      result = c_parse_function_call(arena, parser);
     }
   }
   else if (token.type == C_TOKEN_BEGIN_PARENTHESIS)
   {
     parser->at += 1;
 
-    result = c_parse_expression(arena, parser);
+    result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
 
     if (!c_parse_expect(*parser, C_TOKEN_CLOSE_PARENTHESIS))
     {
@@ -339,70 +389,69 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     }
   }
 
+  // Check if we have a post unary operator, rebuild result tree if so
+  C_Token post_unary_peek = c_parse_peek_token(*parser, 0);
+  if (post_unary_peek.type == C_TOKEN_INCREMENT || post_unary_peek.type == C_TOKEN_DECREMENT)
+  {
+    // Save the old as we need to reattach as a child of the unary
+    C_Node *save = result;
+
+    result = arena_new(arena, C_Node);
+    result->type = C_NODE_UNARY;
+
+    b32 is_post = true;
+    result->unary = c_token_to_unary(post_unary_peek, true);
+
+    parser->at += 1;
+
+    c_node_add_child(result, save);
+  }
+
   return result;
 }
 
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser)
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 {
   C_Node *left = c_parse_expression_start(arena, parser);
 
   C_Node *result = left; // Return just the left if we don't meet later checks
 
-#if 0
-  C_Token peek = c_parse_peek_token(*parser, 0);
-  if (c_token_is_binary_operator(peek))
-  {
-    result = arena_new(arena, C_Node);
-    result->type = C_NODE_BINARY;
-    result->binary = c_token_to_binary(peek);
-
-    parser->at += 1; // now skip the binop token
-
-    // Grab right
-    C_Node *right = c_parse_expression(arena, parser);
-
-    // Add children to binary operator
-    c_node_add_child(result, left);
-    c_node_add_child(result, right);
-  }
-  // catch post increment, decrement here
-  else if (c_token_is_unary_operator(peek))
-  {
-    result = arena_new(arena, C_Node);
-    result->type = C_NODE_UNARY;
-
-    b32 is_post = true;
-    result->unary = c_token_to_unary(peek, true);
-
-    parser->at += 1;
-
-    c_node_add_child(result, left);
-  }
-#else
   while (true)
   {
     C_Token peek = c_parse_peek_token(*parser, 0);
 
     if (c_token_is_binary_operator(peek))
     {
-      result = arena_new(arena, C_Node);
-      result->type = C_NODE_BINARY;
-      result->binary = c_token_to_binary(peek);
+      C_Binary operator  = c_token_to_binary(peek);
+      i32 new_precedence = c_binary_precedence(operator);
 
-      parser->at += 1;
+      if (new_precedence > min_precedence)
+      {
+        result = arena_new(arena, C_Node);
+        result->type = C_NODE_BINARY;
+        result->binary = operator;
 
-      C_Node *right = c_parse_expression_start(arena, parser);
+        parser->at += 1;
 
-      c_node_add_child(result, left);
-      c_node_add_child(result, right);
+        C_Node *right = c_parse_expression(arena, parser, new_precedence);
+
+        c_node_add_child(result, left);
+        c_node_add_child(result, right);
+      }
+      else
+      {
+        // We need to head back up the stack to parse the next operator,
+        // need a lower precedence operator
+        break;
+      }
     }
     else
     {
-      result = left;
+      // No more operators, we are done.
+      break;
     }
 
-    if (result == left) { break; }
-
+    // Now left hand side becomes this new tree
     left = result;
   }
 #endif
@@ -438,10 +487,10 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
   result->type = C_NODE_VARIABLE_DECLARATION;
 
   C_Node *type_node = c_parse_type(arena, parser);
-  c_node_add_child(result, type_node); // First child is type of decl
+  c_node_add_child(result, type_node); // First child is type of variable
 
   C_Node *name_node = c_parse_variable(arena, parser);
-  c_node_add_child(result, name_node); // First child is type of decl
+  c_node_add_child(result, name_node); // Second child is name of variable
 
   C_Token peek = c_parse_peek_token(*parser, 0);
 
@@ -450,8 +499,8 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
     // Skip euqals sign
     parser->at += 1;
 
-    C_Node *expression = c_parse_expression(arena, parser);
-    c_node_add_child(result, expression);
+    C_Node *expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    c_node_add_child(result, expression); // Third child is initializing expression, if present
   }
 
   C_Token wish_semicolon = c_parse_peek_token(*parser, 0);
@@ -468,7 +517,7 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
   return result;
 }
 
-C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser, C_Node *parent)
+C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser)
 {
   return 0;
 }
@@ -505,7 +554,8 @@ C_Node *parse_c_tokens(Arena *arena, C_Token_Array tokens)
         // Function thing
         if (peek1.type == C_TOKEN_BEGIN_PARENTHESIS)
         {
-          c_parse_function_declaration(arena, &parser, root);
+          C_Node *function_declaration = c_parse_function_declaration(arena, &parser);
+          c_node_add_child(root, function_declaration);
         }
         // Variable thing
         else

@@ -87,8 +87,8 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
           case C_BINARY_XOR:                { printf("^"); } break;
           case C_BINARY_BITWISE_AND:        { printf("&"); } break;
           case C_BINARY_BITWISE_OR:         { printf("|"); }  break;
-          case C_BINARY_DOT:                { printf("."); } break;
-          case C_BINARY_ARROW:              { printf("->"); } break;
+          case C_BINARY_ACCESS:             { printf("."); } break;
+          case C_BINARY_POINTER_ACCESS:     { printf("->"); } break;
           case C_BINARY_COMPARE_EQUAL:      { printf("=="); } break;
           case C_BINARY_COMPARE_NOT_EQUAL:  { printf("!="); } break;
           case C_BINARY_LESS_THAN:          { printf("<"); } break;
@@ -148,12 +148,13 @@ int main(int argc, char **argv)
         // "int baz = -1 + 1;\n"
         // "int baz = -(1 + 1);\n"
         // "int boo = 1 + 3 + 1;\n"
-        "int boo = 1 * 3 + 1;\n"
+        // "int boo = 1 * 3 + 1;\n"
         // "int ban = bar++;\n"
-        // "int ban = ++bar;\n"
+        // // "int ban = ++bar;\n"
         // "int ban = bar--;\n"
         // "int par = 1 + (1 + 1) + (1 + 1);\n"
-        // "int par = 1 + (1 + 1) + bar++;\n"
+        "int par = 1 + (1 + 1) + bar++;\n"
+        // "int prec = a > b + c * d + e;"
       );
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);

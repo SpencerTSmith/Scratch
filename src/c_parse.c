@@ -416,6 +416,8 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 
   C_Node *result = left; // Return just the left if we don't meet later checks
 
+  // Idea from https://www.youtube.com/watch?v=fIPO4G42wYE&t=4260s
+  // Currently does not allow for right associative operator of same precedence
   while (true)
   {
     C_Token peek = c_parse_peek_token(*parser, 0);
@@ -427,6 +429,8 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 
       if (new_precedence > min_precedence)
       {
+        // We can recurse down and build a deeper tree
+
         result = arena_new(arena, C_Node);
         result->type = C_NODE_BINARY;
         result->binary = operator;
@@ -440,7 +444,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
       }
       else
       {
-        // We need to head back up the stack to parse the next operator,
+        // We need to head back up the tree to parse the next operator,
         // need a lower precedence operator
         break;
       }

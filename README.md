@@ -6,3 +6,6 @@
 
 # Complete
 - C Tokenizer
+- Bunch of benchmarks and stuff for cache bandwidth, branch prediction, read and write port amounts, etc.
+- Very simple profiler
+- JSON Parser

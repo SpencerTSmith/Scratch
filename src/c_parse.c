@@ -61,6 +61,17 @@ typedef enum C_Binary
   C_BINARY_BITWISE_OR,
   C_BINARY_LOGICAL_AND,
   C_BINARY_LOGICAL_OR,
+  C_BINARY_ASSIGN,
+  C_BINARY_ADD_ASSIGN,
+  C_BINARY_SUBTRACT_ASSIGN,
+  C_BINARY_MULTIPLY_ASSIGN,
+  C_BINARY_DIVIDE_ASSIGN,
+  C_BINARY_MODULO_ASSIGN,
+  C_BINARY_AND_ASSIGN,
+  C_BINARY_OR_ASSIGN,
+  C_BINARY_XOR_ASSIGN,
+  C_BINARY_LEFT_SHIFT_ASSIGN,
+  C_BINARY_RIGHT_SHIFT_ASSIGN,
 
   C_BINARY_COUNT,
 } C_Binary;
@@ -145,6 +156,17 @@ C_Token_Node_Mappings token_to_node_table[] =
   [C_TOKEN_GREATER_THAN_EQUAL] = { C_UNARY_NONE,          C_BINARY_GREATER_THAN_EQUAL },
   [C_TOKEN_LOGICAL_AND]        = { C_UNARY_NONE,          C_BINARY_LOGICAL_AND },
   [C_TOKEN_LOGICAL_OR]         = { C_UNARY_NONE,          C_BINARY_LOGICAL_OR },
+  [C_TOKEN_ASSIGN]             = { C_UNARY_NONE,          C_BINARY_ASSIGN },
+  [C_TOKEN_ADD_ASSIGN]         = { C_UNARY_NONE,          C_BINARY_ADD_ASSIGN },
+  [C_TOKEN_SUBTRACT_ASSIGN]    = { C_UNARY_NONE,          C_BINARY_SUBTRACT_ASSIGN },
+  [C_TOKEN_MULTIPLY_ASSIGN]    = { C_UNARY_NONE,          C_BINARY_MULTIPLY_ASSIGN },
+  [C_TOKEN_DIVIDE_ASSIGN]      = { C_UNARY_NONE,          C_BINARY_DIVIDE_ASSIGN },
+  [C_TOKEN_MODULO_ASSIGN]      = { C_UNARY_NONE,          C_BINARY_MODULO_ASSIGN },
+  [C_TOKEN_AND_ASSIGN]         = { C_UNARY_NONE,          C_BINARY_AND_ASSIGN },
+  [C_TOKEN_OR_ASSIGN]          = { C_UNARY_NONE,          C_BINARY_OR_ASSIGN },
+  [C_TOKEN_XOR_ASSIGN]         = { C_UNARY_NONE,          C_BINARY_XOR_ASSIGN },
+  [C_TOKEN_LEFT_SHIFT_ASSIGN]  = { C_UNARY_NONE,          C_BINARY_LEFT_SHIFT_ASSIGN },
+  [C_TOKEN_RIGHT_SHIFT_ASSIGN] = { C_UNARY_NONE,          C_BINARY_RIGHT_SHIFT_ASSIGN }
 };
 
 static
@@ -251,6 +273,17 @@ i32 c_binary_precedence(C_Binary binary)
     case C_BINARY_BITWISE_OR:         { result = 5; } break;
     case C_BINARY_LOGICAL_AND:        { result = 4; } break;
     case C_BINARY_LOGICAL_OR:         { result = 3; } break;
+    case C_BINARY_ASSIGN:             { result = 1; } break;
+    case C_BINARY_ADD_ASSIGN:         { result = 1; } break;
+    case C_BINARY_SUBTRACT_ASSIGN:    { result = 1; } break;
+    case C_BINARY_MULTIPLY_ASSIGN:    { result = 1; } break;
+    case C_BINARY_DIVIDE_ASSIGN:      { result = 1; } break;
+    case C_BINARY_MODULO_ASSIGN:      { result = 1; } break;
+    case C_BINARY_AND_ASSIGN:         { result = 1; } break;
+    case C_BINARY_OR_ASSIGN:          { result = 1; } break;
+    case C_BINARY_XOR_ASSIGN:         { result = 1; } break;
+    case C_BINARY_LEFT_SHIFT_ASSIGN:  { result = 1; } break;
+    case C_BINARY_RIGHT_SHIFT_ASSIGN: { result = 1; } break;
   }
 
   return result;
@@ -324,7 +357,7 @@ C_Node *c_parse_variable(Arena *arena, C_Parser *parser)
 }
 
 static
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser);
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence);
 
 static
 C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
@@ -348,7 +381,7 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 
       while (!c_parse_current_is(*parser, C_TOKEN_CLOSE_PARENTHESIS))
       {
-        C_Node *argument = c_parse_expression(arena, parser);
+        C_Node *argument = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
         c_node_add_child(result, argument);
 
         // Skip comma
@@ -423,7 +456,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     parser->at += 1;
 
     // Reset as if this expression is all by itself by passing the min precedence
-    result = c_parse_expression(arena, parser);
+    result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
 
     if (!c_parse_current_is(*parser, C_TOKEN_CLOSE_PARENTHESIS))
     {
@@ -458,7 +491,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 }
 
 static
-C_Node *c_parse_binary_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 {
   C_Node *left = c_parse_expression_start(arena, parser);
 
@@ -485,7 +518,7 @@ C_Node *c_parse_binary_expression(Arena *arena, C_Parser *parser, i32 min_preced
 
         parser->at += 1;
 
-        C_Node *right = c_parse_binary_expression(arena, parser, new_precedence);
+        C_Node *right = c_parse_expression(arena, parser, new_precedence);
 
         c_node_add_child(result, left);
         c_node_add_child(result, right);
@@ -507,20 +540,11 @@ C_Node *c_parse_binary_expression(Arena *arena, C_Parser *parser, i32 min_preced
     left = result;
   }
 
-  return result;
-}
-
-static
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser)
-{
-  // By default just a binary expression.
-  C_Node *result = c_parse_binary_expression(arena, parser, C_MIN_PRECEDENCE);
-
   C_Token post_peek = c_parse_peek_token(*parser, 0);
 
-  // Check for ternary if we are the root of an expression, i.e. we were called with the absolute minimum precedence,
-  // if so grab it, rebuild result tree
-  if (post_peek.type == C_TOKEN_QUESTION)
+  // Check for ternary if we were called with a lower precedence
+  // (basically only assignment operators), if so grab it, rebuild result tree
+  if (post_peek.type == C_TOKEN_QUESTION && min_precedence < c_binary_precedence(C_BINARY_ASSIGN) + 1)
   {
     parser->at += 1;
 
@@ -532,7 +556,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser)
 
     c_node_add_child(result, condition);
 
-    C_Node *true_expression = c_parse_expression(arena, parser);
+    C_Node *true_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(result, true_expression);
 
     if (!c_parse_current_is(*parser, C_TOKEN_COLON))
@@ -544,7 +568,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser)
       parser->at += 1;
     }
 
-    C_Node *false_expression = c_parse_expression(arena, parser);
+    C_Node *false_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(result, false_expression);
   }
 
@@ -593,7 +617,7 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
     // Skip euqals sign
     parser->at += 1;
 
-    C_Node *expression = c_parse_expression(arena, parser);
+    C_Node *expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(result, expression); // Third child is initializing expression, if present
   }
 

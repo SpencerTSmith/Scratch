@@ -7,6 +7,7 @@
 #include "../c_tokenize.c"
 #include "../c_parse.c"
 
+static
 void print_c_ast(C_Node *node, isize prev_depth, isize depth)
 {
   if (node)
@@ -99,6 +100,17 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
           case C_BINARY_LOGICAL_OR:         { printf("||"); } break;
           case C_BINARY_LEFT_SHIFT:         { printf("<<"); } break;
           case C_BINARY_RIGHT_SHIFT:        { printf(">>"); } break;
+          case C_BINARY_ASSIGN:             { printf("="); } break;
+          case C_BINARY_ADD_ASSIGN:         { printf("+="); } break;
+          case C_BINARY_SUBTRACT_ASSIGN:    { printf("-="); } break;
+          case C_BINARY_MULTIPLY_ASSIGN:    { printf("*="); } break;
+          case C_BINARY_DIVIDE_ASSIGN:      { printf("/="); } break;
+          case C_BINARY_MODULO_ASSIGN:      { printf("%%="); } break;
+          case C_BINARY_AND_ASSIGN:         { printf("&="); } break;
+          case C_BINARY_OR_ASSIGN:          { printf("|="); } break;
+          case C_BINARY_XOR_ASSIGN:         { printf("^="); } break;
+          case C_BINARY_LEFT_SHIFT_ASSIGN:  { printf("<<="); } break;
+          case C_BINARY_RIGHT_SHIFT_ASSIGN: { printf(">>="); } break;
         }
       }
       break;
@@ -156,7 +168,8 @@ int main(int argc, char **argv)
         // "int baz = -(1 + 1);\n"
         // "int boo = 1 + 3 + 1;\n"
         // "int boo = 1 * 3 + 1;\n"
-        "int shift = 1 << 2;"
+        // "int right = 1 << 2;"
+        // "int left = 1 >> 2;"
         // "int ban = bar++;\n"
         // // "int ban = ++bar;\n"
         // "int ban = bar--;\n"
@@ -169,6 +182,8 @@ int main(int argc, char **argv)
         // "int ref = &a;\n"
         // "int tern = a ? b : c ? d : e;\n"
         // "int tern = a + b ? c : d;\n"
+        // "int assign = a = b;\n"
+        "int tern_assign = a = a ? b : c ? d : e;\n"
       );
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);

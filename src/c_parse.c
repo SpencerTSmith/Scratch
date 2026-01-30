@@ -16,7 +16,6 @@
 // - Expressions
 //   - Compound literals
 //   - Array access
-//   - Assignment operators
 //   - Comma operator
 
 #define C_Node_Type(X)           \
@@ -406,8 +405,6 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
   return result;
 }
 
-// TODO: Better name... basically just capture the part that would act like a leaf of a tree...  but not a real leaf as with parentheses
-// this will could potentially be a rather large subtree acting like a leaf
 static
 C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 {
@@ -525,8 +522,8 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
       }
       else
       {
-        // We need to head back up the tree to parse the next operator,
-        // need a lower precedence operator
+        // We need to head back up the tree (i.e. pop some recursive calls)
+        // to parse the next operator, need a lower precedence operator
         break;
       }
     }
@@ -542,9 +539,13 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 
   C_Token post_peek = c_parse_peek_token(*parser, 0);
 
-  // Check for ternary if we were called with a lower precedence
-  // (basically only assignment operators), if so grab it, rebuild result tree
-  if (post_peek.type == C_TOKEN_QUESTION && min_precedence < c_binary_precedence(C_BINARY_ASSIGN) + 1)
+  // Check for ternary if we were called with a lower precedence than a ternary...
+  // (currently only assignment operators), if so grab it, rebuild result tree
+  // since we know that actually the assignment wants to be assigned
+  // to the evaluation of the ternary... that is, place the ternary
+  // on the right side of the tree when our parent is =, +=, -=, etc.
+  if (post_peek.type == C_TOKEN_QUESTION &&
+      min_precedence <= c_binary_precedence(C_BINARY_ASSIGN))
   {
     parser->at += 1;
 

@@ -90,6 +90,7 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
           case C_BINARY_BITWISE_OR:         { printf("|"); }  break;
           case C_BINARY_ACCESS:             { printf("."); } break;
           case C_BINARY_POINTER_ACCESS:     { printf("->"); } break;
+          case C_BINARY_ARRAY_ACCESS:       { printf("[]"); } break;
           case C_BINARY_COMPARE_EQUAL:      { printf("=="); } break;
           case C_BINARY_COMPARE_NOT_EQUAL:  { printf("!="); } break;
           case C_BINARY_LESS_THAN:          { printf("<"); } break;
@@ -183,8 +184,12 @@ int main(int argc, char **argv)
         // "int tern = a ? b : c ? d : e;\n"
         // "int tern = a + b ? c : d;\n"
         // "int assign = a = b;\n"
-        "int tern_assign = a = a ? b : c ? d : e;\n"
+        // "int tern_assign = a = a ? b : c ? d : e;\n"
+        "int array = 1 + a[10];\n"
       );
+
+    int a[100] = {0};
+    int array = a[10]++;
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);
     // for EACH_INDEX(token_idx, tokens.count)

@@ -147,6 +147,7 @@ C_Token_Node_Mappings token_to_node_table[] =
   [C_TOKEN_XOR]                = { C_UNARY_NONE,          C_BINARY_XOR },
   [C_TOKEN_DOT]                = { C_UNARY_NONE,          C_BINARY_ACCESS },
   [C_TOKEN_ARROW]              = { C_UNARY_NONE,          C_BINARY_POINTER_ACCESS },
+  [C_TOKEN_BEGIN_SQUARE_BRACE] = { C_UNARY_NONE,          C_BINARY_ARRAY_ACCESS },
   [C_TOKEN_COMPARE_EQUAL]      = { C_UNARY_NONE,          C_BINARY_COMPARE_EQUAL },
   [C_TOKEN_COMPARE_NOT_EQUAL]  = { C_UNARY_NONE,          C_BINARY_COMPARE_NOT_EQUAL },
   [C_TOKEN_LESS_THAN]          = { C_UNARY_NONE,          C_BINARY_LESS_THAN },
@@ -253,6 +254,7 @@ i32 c_binary_precedence(C_Binary binary)
   {
     default: { LOG_ERROR("Tried to attain precedence for invalid binary operator"); } break;
     case C_BINARY_ACCESS:             { result = 14; } break;
+    case C_BINARY_ARRAY_ACCESS:       { result = 14; } break;
     case C_BINARY_POINTER_ACCESS:     { result = 14; } break;
     case C_BINARY_MULTIPLY:           { result = 12; } break;
     case C_BINARY_DIVIDE:             { result = 12; } break;
@@ -495,7 +497,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
   C_Node *result = left; // Return just the left if we don't meet later checks
 
   // Idea from https://www.youtube.com/watch?v=fIPO4G42wYE&t=4260s
-  // Currently does not allow for right associative operator of same precedence
+  // FIXME: Currently does not allow for right associative operator of same precedence
   while (true)
   {
     C_Token peek = c_parse_peek_token(*parser, 0);
@@ -508,7 +510,6 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
       if (new_precedence > min_precedence)
       {
         // We can recurse down and build a deeper tree
-
         result = arena_new(arena, C_Node);
         result->type = C_NODE_BINARY;
         result->binary = operator;
@@ -516,6 +517,19 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
         parser->at += 1;
 
         C_Node *right = c_parse_expression(arena, parser, new_precedence);
+
+        // This probably shouldn't go here I don't think, might need to be similar to checking for post ++/--
+        if (operator == C_BINARY_ARRAY_ACCESS)
+        {
+          if (!c_parse_current_is(*parser, C_TOKEN_CLOSE_SQUARE_BRACE))
+          {
+            LOG_ERROR("Expected closing square brace for array access");
+          }
+          else
+          {
+            parser->at += 1;
+          }
+        }
 
         c_node_add_child(result, left);
         c_node_add_child(result, right);

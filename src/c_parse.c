@@ -215,7 +215,6 @@ b32 c_token_is_binary_operator(C_Token token)
   return result;
 }
 
-// Feels like there is a way to do this wihout repeating self so much
 static
 C_Binary c_token_to_binary(C_Token token)
 {

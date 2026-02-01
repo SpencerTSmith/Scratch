@@ -276,6 +276,7 @@ i32 c_operator_precedence(C_Token token, b32 is_unary, b32 is_post)
   return result;
 }
 
+static
 b32 c_binary_is_right_associative(C_Binary binary)
 {
   b32 result = false;
@@ -317,6 +318,19 @@ b32 c_parse_current_is(C_Parser parser, C_Token_Type type)
   return c_parse_peek_token(parser, 0).type == type;
 }
 
+b32 c_parse_consume(C_Parser *parser, C_Token_Type type)
+{
+  b32 result = false;
+
+  if (c_parse_current_is(*parser, type))
+  {
+    result = true;
+    parser->at += 1;
+  }
+
+  return result;
+}
+
 static
 void c_node_add_child(C_Node *parent, C_Node *child)
 {
@@ -352,15 +366,12 @@ C_Node *c_parse_variable(Arena *arena, C_Parser *parser)
     result->type = C_NODE_VARIABLE;
     result->name = token.raw;
 
-    // TODO: the rest
+    c_parse_consume(parser, C_TOKEN_IDENTIFIER);
   }
   else
   {
     LOG_ERROR("Tried to parse non-identifier token as variable");
   }
-
-  // Consume
-  parser->at += 1;
 
   return result;
 }
@@ -382,25 +393,19 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
     result->type = C_NODE_FUNCTION_CALL;
     result->name = identifier.raw;
 
-    parser->at += 1;
+    c_parse_consume(parser, C_TOKEN_IDENTIFIER);
 
-    if (c_parse_current_is(*parser, C_TOKEN_BEGIN_PARENTHESIS))
+    if (c_parse_consume(parser, C_TOKEN_BEGIN_PARENTHESIS))
     {
-      parser->at += 1;
-
-      while (!c_parse_current_is(*parser, C_TOKEN_CLOSE_PARENTHESIS))
+      // Keep going until we consume a close parenthesis.
+      while (!c_parse_consume(parser, C_TOKEN_CLOSE_PARENTHESIS))
       {
         C_Node *argument = c_parse_expression(arena, parser, 1); // FIXME: Don't want commas to act as operators... but this seems non-explicit
         c_node_add_child(result, argument);
 
         // Skip comma
-        if (c_parse_current_is(*parser, C_TOKEN_COMMA))
-        {
-          parser->at += 1;
-        }
+        c_parse_consume(parser, C_TOKEN_COMMA);
       }
-
-      parser->at += 1; // skip the final parenthesis
     }
     else
     {
@@ -430,7 +435,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 
     result->literal = token.literal; // Copy over
 
-    parser->at += 1;
+    c_parse_consume(parser, C_TOKEN_LITERAL);
   }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {
@@ -453,8 +458,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     b32 is_post = false;
 
     result->unary = c_token_to_unary(token, is_post);
-
-    parser->at += 1;
+    c_parse_consume(parser, token.type);
 
     b32 is_unary = true;
     i32 precedence = c_operator_precedence(token, is_unary, is_post);
@@ -463,18 +467,14 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
   }
   else if (token.type == C_TOKEN_BEGIN_PARENTHESIS)
   {
-    parser->at += 1;
+    c_parse_consume(parser, C_TOKEN_BEGIN_PARENTHESIS);
 
     // Reset as if this expression is all by itself by passing the min precedence
     result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
 
-    if (!c_parse_current_is(*parser, C_TOKEN_CLOSE_PARENTHESIS))
+    if (!c_parse_consume(parser, C_TOKEN_CLOSE_PARENTHESIS))
     {
       LOG_ERROR("Expected close parenthesis");
-    }
-    else
-    {
-      parser->at += 1;
     }
   }
 
@@ -509,7 +509,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
         result->type = C_NODE_BINARY;
         result->binary = operator;
 
-        parser->at += 1;
+        c_parse_consume(parser, peek.type);
 
         // We act like the inner expression of array access is surrounded by parenthesis
         if (operator == C_BINARY_ARRAY_ACCESS)
@@ -522,13 +522,9 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
         // For array access, skip over the subsequent close square brace
         if (operator == C_BINARY_ARRAY_ACCESS)
         {
-          if (!c_parse_current_is(*parser, C_TOKEN_CLOSE_SQUARE_BRACE))
+          if(!c_parse_consume(parser, C_TOKEN_CLOSE_SQUARE_BRACE))
           {
             LOG_ERROR("Expected closing square brace for array access");
-          }
-          else
-          {
-            parser->at += 1;
           }
         }
 
@@ -556,7 +552,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
         b32 is_post = true;
         result->unary = operator;
 
-        parser->at += 1;
+        c_parse_consume(parser, peek.type);
 
         c_node_add_child(result, left);
       }
@@ -586,7 +582,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
   if (post_peek.type == C_TOKEN_QUESTION &&
       min_precedence <= c_operator_precedence(post_peek, false, false))
   {
-    parser->at += 1;
+    c_parse_consume(parser, C_TOKEN_QUESTION);
 
     // We know what we have so far is the condition for the ternary.
     C_Node *condition = result;
@@ -600,13 +596,9 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
     C_Node *true_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(result, true_expression);
 
-    if (!c_parse_current_is(*parser, C_TOKEN_COLON))
+    if (!c_parse_consume(parser, C_TOKEN_COLON))
     {
       LOG_ERROR("Expected colon after 2nd ternary argument.");
-    }
-    else
-    {
-      parser->at += 1;
     }
 
     // This gets the precedence of the ternary so we can parse commas correctly as not part of the false expression...
@@ -630,14 +622,14 @@ C_Node *c_parse_type(Arena *arena, C_Parser *parser)
   {
     result->type = C_NODE_TYPE;
     result->name = token.raw; // Hehehe, nice to just do this
+
+    c_parse_consume(parser, token.type);
   }
   // TODO: probably should build a data structure keeping track of structs, typedefs, etc
   else if (token.type == C_TOKEN_IDENTIFIER) // Custom type
   {
   }
 
-  // Consume
-  parser->at += 1;
 
   return result;
 }
@@ -654,23 +646,16 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
   C_Node *name_node = c_parse_variable(arena, parser);
   c_node_add_child(result, name_node); // Second child is name of variable
 
-  C_Token peek = c_parse_peek_token(*parser, 0);
 
-  if (peek.type == C_TOKEN_ASSIGN)
+  // If we see an equal sign, grab initializing expression
+  if (c_parse_consume(parser, C_TOKEN_ASSIGN))
   {
-    // Skip euqals sign
-    parser->at += 1;
-
     C_Node *expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(result, expression); // Third child is initializing expression, if present
   }
 
-  C_Token wish_semicolon = c_parse_peek_token(*parser, 0);
-  if (wish_semicolon.type == C_TOKEN_SEMICOLON)
-  {
-    parser->at += 1;
-  }
-  else
+  // Need a closing ;
+  if (!c_parse_consume(parser, C_TOKEN_SEMICOLON))
   {
     LOG_ERROR("Declaration without subsequent semicolon");
   }

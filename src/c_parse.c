@@ -70,6 +70,7 @@ typedef enum C_Binary
   C_BINARY_XOR_ASSIGN,
   C_BINARY_LEFT_SHIFT_ASSIGN,
   C_BINARY_RIGHT_SHIFT_ASSIGN,
+  C_BINARY_COMMA,
 
   C_BINARY_COUNT,
 } C_Binary;
@@ -122,56 +123,64 @@ struct C_Parser
   usize at;
 };
 
-typedef struct C_Token_Node_Mappings C_Token_Node_Mappings;
-struct C_Token_Node_Mappings
+typedef struct C_Token_Node_Map C_Token_Node_Map;
+struct C_Token_Node_Map
 {
   C_Unary  unary;
   C_Binary binary;
+  i32 unary_precedence;
+  i32 binary_precedence;
+};
+
+// TODO: Could maybe condense this by just setting the enum values to their precedence...
+// also could make sure the C_TOKEN_... are low numbers to keep this table small
+static
+C_Token_Node_Map token_to_node_table[] =
+{
+  [C_TOKEN_DOT]                = { C_UNARY_NONE,          C_BINARY_ACCESS,             C_MIN_PRECEDENCE, 15 },
+  [C_TOKEN_ARROW]              = { C_UNARY_NONE,          C_BINARY_POINTER_ACCESS,     C_MIN_PRECEDENCE, 15 },
+  [C_TOKEN_BEGIN_SQUARE_BRACE] = { C_UNARY_NONE,          C_BINARY_ARRAY_ACCESS,       C_MIN_PRECEDENCE, 15 },
+  [C_TOKEN_INCREMENT]          = { C_UNARY_PRE_INCREMENT, C_BINARY_NONE,               15,               C_MIN_PRECEDENCE }, // NOTE: Special-case
+  [C_TOKEN_DECREMENT]          = { C_UNARY_PRE_DECREMENT, C_BINARY_NONE,               15,               C_MIN_PRECEDENCE }, // NOTE: Special-case
+  [C_TOKEN_BITWISE_NOT]        = { C_UNARY_BITWISE_NOT,   C_BINARY_NONE,               14,               C_MIN_PRECEDENCE },
+  [C_TOKEN_LOGICAL_NOT]        = { C_UNARY_LOGICAL_NOT,   C_BINARY_NONE,               14,               C_MIN_PRECEDENCE },
+  [C_TOKEN_BITWISE_AND]        = { C_UNARY_REFERENCE,     C_BINARY_BITWISE_AND,        14,               8 },
+  [C_TOKEN_STAR]               = { C_UNARY_DEREFERENCE,   C_BINARY_MULTIPLY,           14,               13 },
+  [C_TOKEN_ADD]                = { C_UNARY_PLUS,          C_BINARY_ADD,                14,               12 },
+  [C_TOKEN_MINUS]              = { C_UNARY_NEGATE,        C_BINARY_SUBTRACT,           14,               12 },
+  [C_TOKEN_DIVIDE]             = { C_UNARY_NONE,          C_BINARY_DIVIDE,             C_MIN_PRECEDENCE, 12 },
+  [C_TOKEN_MODULO]             = { C_UNARY_NONE,          C_BINARY_MODULO,             C_MIN_PRECEDENCE, 12 },
+  [C_TOKEN_LEFT_SHIFT]         = { C_UNARY_NONE,          C_BINARY_LEFT_SHIFT,         C_MIN_PRECEDENCE, 11 },
+  [C_TOKEN_RIGHT_SHIFT]        = { C_UNARY_NONE,          C_BINARY_RIGHT_SHIFT,        C_MIN_PRECEDENCE, 11 },
+  [C_TOKEN_LESS_THAN]          = { C_UNARY_NONE,          C_BINARY_LESS_THAN,          C_MIN_PRECEDENCE, 10 },
+  [C_TOKEN_LESS_THAN_EQUAL]    = { C_UNARY_NONE,          C_BINARY_LESS_THAN_EQUAL,    C_MIN_PRECEDENCE, 10 },
+  [C_TOKEN_GREATER_THAN]       = { C_UNARY_NONE,          C_BINARY_GREATER_THAN,       C_MIN_PRECEDENCE, 10 },
+  [C_TOKEN_GREATER_THAN_EQUAL] = { C_UNARY_NONE,          C_BINARY_GREATER_THAN_EQUAL, C_MIN_PRECEDENCE, 10 },
+  [C_TOKEN_COMPARE_EQUAL]      = { C_UNARY_NONE,          C_BINARY_COMPARE_EQUAL,      C_MIN_PRECEDENCE, 9 },
+  [C_TOKEN_COMPARE_NOT_EQUAL]  = { C_UNARY_NONE,          C_BINARY_COMPARE_NOT_EQUAL,  C_MIN_PRECEDENCE, 9 },
+  [C_TOKEN_XOR]                = { C_UNARY_NONE,          C_BINARY_XOR,                C_MIN_PRECEDENCE, 7 },
+  [C_TOKEN_BITWISE_OR]         = { C_UNARY_NONE,          C_BINARY_BITWISE_OR,         C_MIN_PRECEDENCE, 6 },
+  [C_TOKEN_LOGICAL_AND]        = { C_UNARY_NONE,          C_BINARY_LOGICAL_AND,        C_MIN_PRECEDENCE, 5 },
+  [C_TOKEN_LOGICAL_OR]         = { C_UNARY_NONE,          C_BINARY_LOGICAL_OR,         C_MIN_PRECEDENCE, 4 },
+  [C_TOKEN_QUESTION]           = { C_UNARY_NONE,          C_BINARY_NONE,               C_MIN_PRECEDENCE, 3 }, // NOTE: Ternary here for convenience
+  [C_TOKEN_ASSIGN]             = { C_UNARY_NONE,          C_BINARY_ASSIGN,             C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_ADD_ASSIGN]         = { C_UNARY_NONE,          C_BINARY_ADD_ASSIGN,         C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_SUBTRACT_ASSIGN]    = { C_UNARY_NONE,          C_BINARY_SUBTRACT_ASSIGN,    C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_MULTIPLY_ASSIGN]    = { C_UNARY_NONE,          C_BINARY_MULTIPLY_ASSIGN,    C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_DIVIDE_ASSIGN]      = { C_UNARY_NONE,          C_BINARY_DIVIDE_ASSIGN,      C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_MODULO_ASSIGN]      = { C_UNARY_NONE,          C_BINARY_MODULO_ASSIGN,      C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_AND_ASSIGN]         = { C_UNARY_NONE,          C_BINARY_AND_ASSIGN,         C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_OR_ASSIGN]          = { C_UNARY_NONE,          C_BINARY_OR_ASSIGN,          C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_XOR_ASSIGN]         = { C_UNARY_NONE,          C_BINARY_XOR_ASSIGN,         C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_LEFT_SHIFT_ASSIGN]  = { C_UNARY_NONE,          C_BINARY_LEFT_SHIFT_ASSIGN,  C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_RIGHT_SHIFT_ASSIGN] = { C_UNARY_NONE,          C_BINARY_RIGHT_SHIFT_ASSIGN, C_MIN_PRECEDENCE, 2 },
+  [C_TOKEN_COMMA]              = { C_UNARY_NONE,          C_BINARY_COMMA,              C_MIN_PRECEDENCE, 1 },
 };
 
 static
-C_Token_Node_Mappings token_to_node_table[] =
+C_Token_Node_Map c_token_to_node_mapping(C_Token_Type type)
 {
-  [C_TOKEN_ADD]                = { C_UNARY_PLUS,          C_BINARY_ADD },
-  [C_TOKEN_MINUS]              = { C_UNARY_NEGATE,        C_BINARY_SUBTRACT },
-  [C_TOKEN_STAR]               = { C_UNARY_DEREFERENCE,   C_BINARY_MULTIPLY },
-  [C_TOKEN_INCREMENT]          = { C_UNARY_PRE_INCREMENT, C_BINARY_NONE }, // NOTE: Special-case
-  [C_TOKEN_DECREMENT]          = { C_UNARY_PRE_DECREMENT, C_BINARY_NONE }, // NOTE: Special-case
-  [C_TOKEN_BITWISE_AND]        = { C_UNARY_REFERENCE,     C_BINARY_BITWISE_AND},
-  [C_TOKEN_BITWISE_NOT]        = { C_UNARY_BITWISE_NOT,   C_BINARY_NONE },
-  [C_TOKEN_LOGICAL_NOT]        = { C_UNARY_LOGICAL_NOT,   C_BINARY_NONE },
-  [C_TOKEN_LEFT_SHIFT]         = { C_UNARY_NONE,          C_BINARY_LEFT_SHIFT },
-  [C_TOKEN_RIGHT_SHIFT]        = { C_UNARY_NONE,          C_BINARY_RIGHT_SHIFT },
-  [C_TOKEN_BITWISE_OR]         = { C_UNARY_NONE,          C_BINARY_BITWISE_OR},
-  [C_TOKEN_XOR]                = { C_UNARY_NONE,          C_BINARY_XOR },
-  [C_TOKEN_DOT]                = { C_UNARY_NONE,          C_BINARY_ACCESS },
-  [C_TOKEN_ARROW]              = { C_UNARY_NONE,          C_BINARY_POINTER_ACCESS },
-  [C_TOKEN_BEGIN_SQUARE_BRACE] = { C_UNARY_NONE,          C_BINARY_ARRAY_ACCESS },
-  [C_TOKEN_COMPARE_EQUAL]      = { C_UNARY_NONE,          C_BINARY_COMPARE_EQUAL },
-  [C_TOKEN_COMPARE_NOT_EQUAL]  = { C_UNARY_NONE,          C_BINARY_COMPARE_NOT_EQUAL },
-  [C_TOKEN_LESS_THAN]          = { C_UNARY_NONE,          C_BINARY_LESS_THAN },
-  [C_TOKEN_LESS_THAN_EQUAL]    = { C_UNARY_NONE,          C_BINARY_LESS_THAN_EQUAL },
-  [C_TOKEN_GREATER_THAN]       = { C_UNARY_NONE,          C_BINARY_GREATER_THAN },
-  [C_TOKEN_GREATER_THAN_EQUAL] = { C_UNARY_NONE,          C_BINARY_GREATER_THAN_EQUAL },
-  [C_TOKEN_LOGICAL_AND]        = { C_UNARY_NONE,          C_BINARY_LOGICAL_AND },
-  [C_TOKEN_LOGICAL_OR]         = { C_UNARY_NONE,          C_BINARY_LOGICAL_OR },
-  [C_TOKEN_ASSIGN]             = { C_UNARY_NONE,          C_BINARY_ASSIGN },
-  [C_TOKEN_ADD_ASSIGN]         = { C_UNARY_NONE,          C_BINARY_ADD_ASSIGN },
-  [C_TOKEN_SUBTRACT_ASSIGN]    = { C_UNARY_NONE,          C_BINARY_SUBTRACT_ASSIGN },
-  [C_TOKEN_MULTIPLY_ASSIGN]    = { C_UNARY_NONE,          C_BINARY_MULTIPLY_ASSIGN },
-  [C_TOKEN_DIVIDE_ASSIGN]      = { C_UNARY_NONE,          C_BINARY_DIVIDE_ASSIGN },
-  [C_TOKEN_MODULO_ASSIGN]      = { C_UNARY_NONE,          C_BINARY_MODULO_ASSIGN },
-  [C_TOKEN_AND_ASSIGN]         = { C_UNARY_NONE,          C_BINARY_AND_ASSIGN },
-  [C_TOKEN_OR_ASSIGN]          = { C_UNARY_NONE,          C_BINARY_OR_ASSIGN },
-  [C_TOKEN_XOR_ASSIGN]         = { C_UNARY_NONE,          C_BINARY_XOR_ASSIGN },
-  [C_TOKEN_LEFT_SHIFT_ASSIGN]  = { C_UNARY_NONE,          C_BINARY_LEFT_SHIFT_ASSIGN },
-  [C_TOKEN_RIGHT_SHIFT_ASSIGN] = { C_UNARY_NONE,          C_BINARY_RIGHT_SHIFT_ASSIGN }
-};
-
-static
-C_Token_Node_Mappings c_token_to_node_mapping(C_Token_Type type)
-{
-  C_Token_Node_Mappings result = {0};
+  C_Token_Node_Map result = {0};
 
   if (type > 0 && type < STATIC_COUNT(token_to_node_table))
   {
@@ -244,45 +253,46 @@ C_Unary c_token_to_unary(C_Token token, b32 is_post)
 }
 
 static
-i32 c_binary_precedence(C_Binary binary)
+i32 c_operator_precedence(C_Token token, b32 is_unary, b32 is_post)
 {
   i32 result = C_MIN_PRECEDENCE;
 
-  switch (binary)
+  C_Token_Node_Map info = c_token_to_node_mapping(token.type);
+  if (is_unary)
   {
-    default: { LOG_ERROR("Tried to attain precedence for invalid binary operator"); } break;
-    case C_BINARY_ACCESS:             { result = 14; } break;
-    case C_BINARY_ARRAY_ACCESS:       { result = 14; } break;
-    case C_BINARY_POINTER_ACCESS:     { result = 14; } break;
-    case C_BINARY_MULTIPLY:           { result = 12; } break;
-    case C_BINARY_DIVIDE:             { result = 12; } break;
-    case C_BINARY_MODULO:             { result = 12; } break;
-    case C_BINARY_ADD:                { result = 11; } break;
-    case C_BINARY_SUBTRACT:           { result = 11; } break;
-    case C_BINARY_LEFT_SHIFT:         { result = 10; } break;
-    case C_BINARY_RIGHT_SHIFT:        { result = 10; } break;
-    case C_BINARY_LESS_THAN:          { result = 9; } break;
-    case C_BINARY_LESS_THAN_EQUAL:    { result = 9; } break;
-    case C_BINARY_GREATER_THAN:       { result = 9; } break;
-    case C_BINARY_GREATER_THAN_EQUAL: { result = 9; } break;
-    case C_BINARY_COMPARE_EQUAL:      { result = 8; } break;
-    case C_BINARY_COMPARE_NOT_EQUAL:  { result = 8; } break;
-    case C_BINARY_BITWISE_AND:        { result = 7; } break;
-    case C_BINARY_XOR:                { result = 6; } break;
-    case C_BINARY_BITWISE_OR:         { result = 5; } break;
-    case C_BINARY_LOGICAL_AND:        { result = 4; } break;
-    case C_BINARY_LOGICAL_OR:         { result = 3; } break;
-    case C_BINARY_ASSIGN:             { result = 1; } break;
-    case C_BINARY_ADD_ASSIGN:         { result = 1; } break;
-    case C_BINARY_SUBTRACT_ASSIGN:    { result = 1; } break;
-    case C_BINARY_MULTIPLY_ASSIGN:    { result = 1; } break;
-    case C_BINARY_DIVIDE_ASSIGN:      { result = 1; } break;
-    case C_BINARY_MODULO_ASSIGN:      { result = 1; } break;
-    case C_BINARY_AND_ASSIGN:         { result = 1; } break;
-    case C_BINARY_OR_ASSIGN:          { result = 1; } break;
-    case C_BINARY_XOR_ASSIGN:         { result = 1; } break;
-    case C_BINARY_LEFT_SHIFT_ASSIGN:  { result = 1; } break;
-    case C_BINARY_RIGHT_SHIFT_ASSIGN: { result = 1; } break;
+    result = info.unary_precedence;
+
+    // NOTE: Special case
+    if ((info.unary == C_UNARY_PRE_INCREMENT || info.unary == C_UNARY_PRE_DECREMENT) && is_post)
+    {
+      result += 1;
+    }
+  }
+  else
+  {
+    result = info.binary_precedence;
+  }
+
+  return result;
+}
+
+b32 c_binary_is_right_associative(C_Binary binary)
+{
+  b32 result = false;
+
+  if (binary == C_BINARY_ASSIGN             ||
+      binary == C_BINARY_ADD_ASSIGN         ||
+      binary == C_BINARY_SUBTRACT_ASSIGN    ||
+      binary == C_BINARY_MULTIPLY_ASSIGN    ||
+      binary == C_BINARY_DIVIDE_ASSIGN      ||
+      binary == C_BINARY_MODULO_ASSIGN      ||
+      binary == C_BINARY_LEFT_SHIFT_ASSIGN  ||
+      binary == C_BINARY_RIGHT_SHIFT_ASSIGN ||
+      binary == C_BINARY_AND_ASSIGN         ||
+      binary == C_BINARY_XOR_ASSIGN         ||
+      binary == C_BINARY_OR_ASSIGN)
+  {
+    result = true;
   }
 
   return result;
@@ -380,7 +390,7 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 
       while (!c_parse_current_is(*parser, C_TOKEN_CLOSE_PARENTHESIS))
       {
-        C_Node *argument = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+        C_Node *argument = c_parse_expression(arena, parser, 1); // FIXME: Don't want commas to act as operators... but this seems non-explicit
         c_node_add_child(result, argument);
 
         // Skip comma
@@ -405,6 +415,7 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
   return result;
 }
 
+// We parse identifiers, function calls, prefix unary ops, and open parenthesis here.
 static
 C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 {
@@ -421,21 +432,6 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 
     parser->at += 1;
   }
-  else if (c_token_is_unary_operator(token))
-  {
-    result = arena_new(arena, C_Node);
-    result->type = C_NODE_UNARY;
-
-    b32 is_post = false;
-    result->unary = c_token_to_unary(token, is_post);
-
-    parser->at += 1;
-
-    // Only parse a single 'thing', i.e. recurse so we only parse a larger expression if parenthesis
-    // FIXME: This should be called wi
-    C_Node *child = c_parse_expression(arena, parser, 13);
-    c_node_add_child(result, child);
-  }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {
     C_Token peek = c_parse_peek_token(*parser, 1);
@@ -448,6 +444,22 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     {
       result = c_parse_function_call(arena, parser);
     }
+  }
+  else if (c_token_is_unary_operator(token))
+  {
+    result = arena_new(arena, C_Node);
+    result->type = C_NODE_UNARY;
+
+    b32 is_post = false;
+
+    result->unary = c_token_to_unary(token, is_post);
+
+    parser->at += 1;
+
+    b32 is_unary = true;
+    i32 precedence = c_operator_precedence(token, is_unary, is_post);
+    C_Node *child = c_parse_expression(arena, parser, precedence);
+    c_node_add_child(result, child);
   }
   else if (token.type == C_TOKEN_BEGIN_PARENTHESIS)
   {
@@ -477,7 +489,6 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
   C_Node *result = left; // Return just the left if we don't meet later checks
 
   // Idea from https://www.youtube.com/watch?v=fIPO4G42wYE&t=4260s
-  // FIXME: Currently does not allow for right associative operator of same precedence
   while (true)
   {
     C_Token peek = c_parse_peek_token(*parser, 0);
@@ -485,9 +496,13 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
     if (c_token_is_binary_operator(peek))
     {
       C_Binary operator  = c_token_to_binary(peek);
-      i32 new_precedence = c_binary_precedence(operator);
+      i32 new_precedence = c_operator_precedence(peek, false, false);
 
-      if (new_precedence > min_precedence)
+      // Assignments are right associative, everything else is left
+      b32 should_right_associate = (new_precedence > min_precedence) ||
+                                   (new_precedence == min_precedence && c_binary_is_right_associative(operator));
+
+      if (should_right_associate)
       {
         // We can recurse down and build a deeper tree
         result = arena_new(arena, C_Node);
@@ -528,11 +543,10 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
       }
     }
     // Handle postfix unary operators here
-    // FIXME: Clean up this condition. As well this is basically the same code as for binary, but slightly different condition
     else if (peek.type == C_TOKEN_INCREMENT || peek.type == C_TOKEN_DECREMENT)
     {
       C_Unary operator  = c_token_to_unary(peek, true);
-      i32 new_precedence = c_binary_precedence(C_BINARY_ACCESS); // NOTE: For now just set to same precedence as access... which is true, but this is messy
+      i32 new_precedence = c_operator_precedence(peek, true, true);
 
       if (new_precedence > min_precedence)
       {
@@ -563,13 +577,14 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 
   C_Token post_peek = c_parse_peek_token(*parser, 0);
 
-  // Check for ternary if we were called with a lower precedence than a ternary...
-  // (currently only assignment operators), if so grab it, rebuild result tree
+  // Check for ternary and if we were called with a lower or equal (since ternary is right-associative) precedence than a ternary...
+  // (assignment operators, comma), if so grab it, rebuild result tree
   // since we know that actually the assignment wants to be assigned
   // to the evaluation of the ternary... that is, place the ternary
   // on the right side of the tree when our parent is =, +=, -=, etc.
+  // This could potentially be put into the main loop, but since this is just such a special case I decided against it.
   if (post_peek.type == C_TOKEN_QUESTION &&
-      min_precedence <= c_binary_precedence(C_BINARY_ASSIGN))
+      min_precedence <= c_operator_precedence(post_peek, false, false))
   {
     parser->at += 1;
 
@@ -581,6 +596,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 
     c_node_add_child(result, condition);
 
+    // Middle expr should act as if parenthesis according to docs
     C_Node *true_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(result, true_expression);
 
@@ -593,7 +609,10 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
       parser->at += 1;
     }
 
-    C_Node *false_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    // This gets the precedence of the ternary so we can parse commas correctly as not part of the false expression...
+    // Though, this lead to side effect of things like a ? b : c = e being parsed even though they are invalid.
+    i32 ternary_precedence = c_operator_precedence(post_peek, false, false);
+    C_Node *false_expression = c_parse_expression(arena, parser, ternary_precedence);
     c_node_add_child(result, false_expression);
   }
 

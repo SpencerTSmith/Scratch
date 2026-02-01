@@ -148,9 +148,9 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
     }
     printf("\n");
 
-    for (C_Node *cursor = node->first_child; cursor; cursor = cursor->next_sibling)
+    for (C_Node *child = node->first_child; child; child = child->next_sibling)
     {
-      print_c_ast(cursor, depth, depth + 1);
+      print_c_ast(child, depth, depth + 1);
     }
   }
 }
@@ -181,15 +181,21 @@ int main(int argc, char **argv)
         // "int call = func2(a, a + b, func());\n"
         // "int ref = &a + 1;\n"
         // "int ref = &a;\n"
+        // "int deref = *a;\n"
         // "int tern = a ? b : c ? d : e;\n"
         // "int tern = a + b ? c : d;\n"
         // "int assign = a = b;\n"
         // "int tern_assign = a = a ? b : c ? d : e;\n"
-        "int array = 1 + a[10];\n"
+        // "int array = 1 + a[10];\n"
+        "int array = 1 + a[10 + b[10]]++;\n"
+        // "int array = 10 + b++;\n"
+        "int access = a.b++;\n"
+        "int access = a->b[10].c--;\n"
       );
 
     int a[100] = {0};
-    int array = a[10]++;
+    int b = 10;
+    int array = 10 + b++;
 
     C_Token_Array tokens = tokenize_c_code(&arena, sample_program);
     // for EACH_INDEX(token_idx, tokens.count)

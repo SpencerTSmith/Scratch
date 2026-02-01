@@ -15,7 +15,6 @@
 //   - do while
 // - Expressions
 //   - Compound literals
-//   - Array access
 //   - Comma operator
 
 #define C_Node_Type(X)           \
@@ -133,11 +132,11 @@ struct C_Token_Node_Mappings
 static
 C_Token_Node_Mappings token_to_node_table[] =
 {
+  [C_TOKEN_ADD]                = { C_UNARY_PLUS,          C_BINARY_ADD },
   [C_TOKEN_MINUS]              = { C_UNARY_NEGATE,        C_BINARY_SUBTRACT },
   [C_TOKEN_STAR]               = { C_UNARY_DEREFERENCE,   C_BINARY_MULTIPLY },
   [C_TOKEN_INCREMENT]          = { C_UNARY_PRE_INCREMENT, C_BINARY_NONE }, // NOTE: Special-case
   [C_TOKEN_DECREMENT]          = { C_UNARY_PRE_DECREMENT, C_BINARY_NONE }, // NOTE: Special-case
-  [C_TOKEN_ADD]                = { C_UNARY_PLUS,          C_BINARY_ADD },
   [C_TOKEN_BITWISE_AND]        = { C_UNARY_REFERENCE,     C_BINARY_BITWISE_AND},
   [C_TOKEN_BITWISE_NOT]        = { C_UNARY_BITWISE_NOT,   C_BINARY_NONE },
   [C_TOKEN_LOGICAL_NOT]        = { C_UNARY_LOGICAL_NOT,   C_BINARY_NONE },
@@ -231,7 +230,7 @@ C_Unary c_token_to_unary(C_Token token, b32 is_post)
   // Special case for post increment and decrement
   if (is_post)
   {
-    if (result == C_UNARY_PRE_DECREMENT)
+    if (result == C_UNARY_PRE_INCREMENT)
     {
       result = C_UNARY_POST_INCREMENT;
     }
@@ -466,25 +465,6 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     }
   }
 
-  C_Token post_peek = c_parse_peek_token(*parser, 0);
-
-  // Check if we have a post unary operator, rebuild result tree if so
-  if (post_peek.type == C_TOKEN_INCREMENT || post_peek.type == C_TOKEN_DECREMENT)
-  {
-    // Save the old as we need to reattach as a child of the unary
-    C_Node *save = result;
-
-    result = arena_new(arena, C_Node);
-    result->type = C_NODE_UNARY;
-
-    b32 is_post = true;
-    result->unary = c_token_to_unary(post_peek, true);
-
-    parser->at += 1;
-
-    c_node_add_child(result, save);
-  }
-
   return result;
 }
 
@@ -515,9 +495,15 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 
         parser->at += 1;
 
+        // We act like the inner expression of array access is surrounded by parenthesis
+        if (operator == C_BINARY_ARRAY_ACCESS)
+        {
+          new_precedence = C_MIN_PRECEDENCE;
+        }
+
         C_Node *right = c_parse_expression(arena, parser, new_precedence);
 
-        // This probably shouldn't go here I don't think, might need to be similar to checking for post ++/--
+        // For array access, skip over the subsequent close square brace
         if (operator == C_BINARY_ARRAY_ACCESS)
         {
           if (!c_parse_current_is(*parser, C_TOKEN_CLOSE_SQUARE_BRACE))
@@ -537,6 +523,30 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
       {
         // We need to head back up the tree (i.e. pop some recursive calls)
         // to parse the next operator, need a lower precedence operator
+        break;
+      }
+    }
+    // Handle postfix unary operators here
+    // FIXME: Clean up this condition. As well this is basically the same code as for binary, but slightly different condition
+    else if (peek.type == C_TOKEN_INCREMENT || peek.type == C_TOKEN_DECREMENT)
+    {
+      C_Unary operator  = c_token_to_unary(peek, true);
+      i32 new_precedence = c_binary_precedence(C_BINARY_ACCESS); // NOTE: For now just set to same precedence as access... which is true, but this is messy
+
+      if (new_precedence > min_precedence)
+      {
+        result = arena_new(arena, C_Node);
+        result->type = C_NODE_UNARY;
+
+        b32 is_post = true;
+        result->unary = operator;
+
+        parser->at += 1;
+
+        c_node_add_child(result, left);
+      }
+      else
+      {
         break;
       }
     }
@@ -673,6 +683,7 @@ C_Node *parse_c_tokens(Arena *arena, C_Token_Array tokens)
     usize to_consume = 0;
 
     C_Token token = c_parse_peek_token(parser, 0);
+    printf("%s\n", C_Token_Type_strings[token.type]);
 
     // TODO: Should also check for declaration if it is an identifier that is a type too
     if (c_token_is_type_keyword(token))

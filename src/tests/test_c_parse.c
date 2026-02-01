@@ -134,6 +134,10 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
         }
       }
       break;
+      case C_NODE_TERNARY:
+      {
+        printf("?:");
+      }
       case C_NODE_VARIABLE:
       case C_NODE_TYPE:
       {
@@ -183,13 +187,14 @@ int main(int argc, char **argv)
         // "int ref = &a;\n"
         // "int deref = *a;\n"
         // "int tern = a ? b : c ? d : e;\n"
-        // "int tern = a + b ? c : d;\n"
         // "int assign = a = b;\n"
         // "int tern_assign = a = a ? b : c ? d : e;\n"
+        // "int tern_no_assign = a + a ? b : c ? d : e;\n"
         // "int array = 1 + a[10];\n"
-        "int array = 1 + a[10 + b[10]]++;\n"
+        // "int array = 1 + a[10 + b[10]]++;\n"
         // "int array = 10 + b++;\n"
         "int access = a.b++;\n"
+        "int access = !a[10] + 10;\n"
         "int access = a->b[10].c--;\n"
       );
 

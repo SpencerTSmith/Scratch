@@ -432,7 +432,8 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     parser->at += 1;
 
     // Only parse a single 'thing', i.e. recurse so we only parse a larger expression if parenthesis
-    C_Node *child = c_parse_expression_start(arena, parser);
+    // FIXME: This should be called wi
+    C_Node *child = c_parse_expression(arena, parser, 13);
     c_node_add_child(result, child);
   }
   else if (token.type == C_TOKEN_IDENTIFIER)

@@ -674,6 +674,8 @@ int main(int argc, char **argv)
     "{\n"
     "  int boobar = 0;\n"
     "  boobar += boo * bar;\n"
+    "  if (boobar > 0)\n"
+    "    boobar += 1; \n"
     "  return boobar * 2;\n"
     "}\n"
   );

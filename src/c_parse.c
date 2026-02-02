@@ -725,8 +725,15 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
         c_node_add_child(result, condition);
 
-        C_Node *statement = c_parse_statement(arena, parser);
-        c_node_add_child(result, condition);
+        if (c_parse_consume(parser, C_TOKEN_CLOSE_PARENTHESIS))
+        {
+          C_Node *statement = c_parse_statement(arena, parser);
+          c_node_add_child(result, statement);
+        }
+        else
+        {
+          c_parse_error(parser, "Expected close parenthesis following if condition expression.");
+        }
       }
       else
       {
@@ -781,13 +788,15 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
     {
       result = c_parse_block(arena, parser);
     } break;
+
+    // Everything else
     default:
     {
       b32 at_top_level = false;
       result = c_parse_declaration(arena, parser, at_top_level);
 
-      // We tried to parse a declaration and failed.
-      // So, this is most likely an expression statement or there is not a statement here
+      // We tried to parse a declaration and couldn't.
+      // So, this is most likely an expression statement or its just not a statement.
       if (result == c_nil_node())
       {
         result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);

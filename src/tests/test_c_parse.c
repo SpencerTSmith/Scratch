@@ -140,7 +140,7 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
         printf("?:");
       }
       break;
-      case C_NODE_VARIABLE:
+      case C_NODE_IDENTIFIER:
       case C_NODE_TYPE:
       {
         printf("%.*s", STRF(node->name));
@@ -161,29 +161,41 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
   }
 }
 
-C_Node *parse_expr(Arena *arena, String code)
+static
+void print_code_tree(Arena *arena, String code)
+{
+  C_Token_Array tokens = tokenize_c_code(arena, code);
+  print_c_ast(parse_c_tokens(arena, tokens), 0, 0);
+}
+
+static
+C_Node *parse_expression(Arena *arena, String code)
 {
   C_Token_Array tokens = tokenize_c_code(arena, code);
   C_Parser parser = { .tokens = tokens, .at = 0 };
 
   return c_parse_expression(arena, &parser, C_MIN_PRECEDENCE);
 }
-// Helper to check tree structure
+
+static
 b32 is_binary(C_Node *node, C_Binary op)
 {
   return node && node->type == C_NODE_BINARY && node->binary == op;
 }
 
+static
 b32 is_unary(C_Node *node, C_Unary op)
 {
   return node && node->type == C_NODE_UNARY && node->unary == op;
 }
 
-b32 is_variable(C_Node *node, String name)
+static
+b32 is_identifier(C_Node *node, String name)
 {
-  return node && node->type == C_NODE_VARIABLE && string_match(node->name, name);
+  return node && node->type == C_NODE_IDENTIFIER && string_match(node->name, name);
 }
 
+static
 b32 is_literal_int(C_Node *node, u64 value)
 {
   return node && node->type      == C_NODE_LITERAL &&
@@ -197,7 +209,7 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Literals"))
   {
-    C_Node *tree = parse_expr(&arena, STR("42"));
+    C_Node *tree = parse_expression(&arena, STR("42"));
     TEST_EVAL(tree->type == C_NODE_LITERAL);
     TEST_EVAL(tree->literal.integer.v == 42);
 
@@ -206,8 +218,8 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Variables"))
   {
-    C_Node *tree = parse_expr(&arena, STR("foo"));
-    TEST_EVAL(tree->type == C_NODE_VARIABLE);
+    C_Node *tree = parse_expression(&arena, STR("foo"));
+    TEST_EVAL(tree->type == C_NODE_IDENTIFIER);
     TEST_EVAL(string_match(tree->name, STR("foo")));
 
     arena_clear(&arena);
@@ -215,146 +227,146 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Binary precedence - multiplication before addition"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a + b * c"));
+    C_Node *tree = parse_expression(&arena, STR("a + b * c"));
 
     TEST_EVAL(is_binary(tree, C_BINARY_ADD));
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
 
     C_Node *right = tree->first_child->next_sibling;
     TEST_EVAL(is_binary(right, C_BINARY_MULTIPLY));
-    TEST_EVAL(is_variable(right->first_child, STR("b")));
-    TEST_EVAL(is_variable(right->first_child->next_sibling, STR("c")));
+    TEST_EVAL(is_identifier(right->first_child, STR("b")));
+    TEST_EVAL(is_identifier(right->first_child->next_sibling, STR("c")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Binary precedence - reversed"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a * b + c"));
+    C_Node *tree = parse_expression(&arena, STR("a * b + c"));
 
     TEST_EVAL(is_binary(tree, C_BINARY_ADD));
 
     C_Node *left = tree->first_child;
     TEST_EVAL(is_binary(left, C_BINARY_MULTIPLY));
-    TEST_EVAL(is_variable(left->first_child, STR("a")));
-    TEST_EVAL(is_variable(left->first_child->next_sibling, STR("b")));
+    TEST_EVAL(is_identifier(left->first_child, STR("a")));
+    TEST_EVAL(is_identifier(left->first_child->next_sibling, STR("b")));
 
-    TEST_EVAL(is_variable(tree->first_child->next_sibling, STR("c")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("c")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Left associativity - addition"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a + b + c"));
+    C_Node *tree = parse_expression(&arena, STR("a + b + c"));
 
     // Should be: (a + b) + c
     TEST_EVAL(is_binary(tree, C_BINARY_ADD));
-    TEST_EVAL(is_variable(tree->first_child->next_sibling, STR("c")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("c")));
 
     C_Node *left = tree->first_child;
     TEST_EVAL(is_binary(left, C_BINARY_ADD));
-    TEST_EVAL(is_variable(left->first_child, STR("a")));
-    TEST_EVAL(is_variable(left->first_child->next_sibling, STR("b")));
+    TEST_EVAL(is_identifier(left->first_child, STR("a")));
+    TEST_EVAL(is_identifier(left->first_child->next_sibling, STR("b")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Right associativity - assignment"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a = b = c"));
+    C_Node *tree = parse_expression(&arena, STR("a = b = c"));
 
     // Should be: a = (b = c)
     TEST_EVAL(is_binary(tree, C_BINARY_ASSIGN));
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
 
     C_Node *right = tree->first_child->next_sibling;
     TEST_EVAL(is_binary(right, C_BINARY_ASSIGN));
-    TEST_EVAL(is_variable(right->first_child, STR("b")));
-    TEST_EVAL(is_variable(right->first_child->next_sibling, STR("c")));
+    TEST_EVAL(is_identifier(right->first_child, STR("b")));
+    TEST_EVAL(is_identifier(right->first_child->next_sibling, STR("c")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Parentheses override precedence"))
   {
-    C_Node *tree = parse_expr(&arena, STR("(a + b) * c"));
+    C_Node *tree = parse_expression(&arena, STR("(a + b) * c"));
 
     TEST_EVAL(is_binary(tree, C_BINARY_MULTIPLY));
 
     C_Node *left = tree->first_child;
     TEST_EVAL(is_binary(left, C_BINARY_ADD));
-    TEST_EVAL(is_variable(left->first_child, STR("a")));
-    TEST_EVAL(is_variable(left->first_child->next_sibling, STR("b")));
+    TEST_EVAL(is_identifier(left->first_child, STR("a")));
+    TEST_EVAL(is_identifier(left->first_child->next_sibling, STR("b")));
 
-    TEST_EVAL(is_variable(tree->first_child->next_sibling, STR("c")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("c")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Prefix unary operators"))
   {
-    C_Node *tree = parse_expr(&arena, STR("-a"));
+    C_Node *tree = parse_expression(&arena, STR("-a"));
     TEST_EVAL(is_unary(tree, C_UNARY_NEGATE));
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
 
     arena_clear(&arena);
 
-    tree = parse_expr(&arena, STR("!a"));
+    tree = parse_expression(&arena, STR("!a"));
     TEST_EVAL(is_unary(tree, C_UNARY_LOGICAL_NOT));
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
 
     arena_clear(&arena);
 
-    tree = parse_expr(&arena, STR("*ptr"));
+    tree = parse_expression(&arena, STR("*ptr"));
     TEST_EVAL(is_unary(tree, C_UNARY_DEREFERENCE));
-    TEST_EVAL(is_variable(tree->first_child, STR("ptr")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("ptr")));
 
     arena_clear(&arena);
 
-    tree = parse_expr(&arena, STR("&var"));
+    tree = parse_expression(&arena, STR("&var"));
     TEST_EVAL(is_unary(tree, C_UNARY_REFERENCE));
-    TEST_EVAL(is_variable(tree->first_child, STR("var")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("var")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Postfix unary operators"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a++"));
+    C_Node *tree = parse_expression(&arena, STR("a++"));
     TEST_EVAL(is_unary(tree, C_UNARY_POST_INCREMENT));
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
 
     arena_clear(&arena);
 
-    tree = parse_expr(&arena, STR("a--"));
+    tree = parse_expression(&arena, STR("a--"));
     TEST_EVAL(is_unary(tree, C_UNARY_POST_DECREMENT));
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Unary and binary interaction"))
   {
-    C_Node *tree = parse_expr(&arena, STR("-a * b"));
+    C_Node *tree = parse_expression(&arena, STR("-a * b"));
 
     TEST_EVAL(is_binary(tree, C_BINARY_MULTIPLY));
 
     C_Node *left = tree->first_child;
     TEST_EVAL(is_unary(left, C_UNARY_NEGATE));
-    TEST_EVAL(is_variable(left->first_child, STR("a")));
+    TEST_EVAL(is_identifier(left->first_child, STR("a")));
 
-    TEST_EVAL(is_variable(tree->first_child->next_sibling, STR("b")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("b")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Array access"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a[0]"));
+    C_Node *tree = parse_expression(&arena, STR("a[0]"));
 
     TEST_EVAL(is_binary(tree, C_BINARY_ARRAY_ACCESS));
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
     TEST_EVAL(is_literal_int(tree->first_child->next_sibling, 0));
 
     arena_clear(&arena);
@@ -362,29 +374,29 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Member access"))
   {
-    C_Node *tree = parse_expr(&arena, STR("obj.field"));
+    C_Node *tree = parse_expression(&arena, STR("obj.field"));
 
     TEST_EVAL(is_binary(tree, C_BINARY_ACCESS));
-    TEST_EVAL(is_variable(tree->first_child, STR("obj")));
-    TEST_EVAL(is_variable(tree->first_child->next_sibling, STR("field")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("obj")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("field")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Pointer member access"))
   {
-    C_Node *tree = parse_expr(&arena, STR("ptr->field"));
+    C_Node *tree = parse_expression(&arena, STR("ptr->field"));
 
     TEST_EVAL(is_binary(tree, C_BINARY_POINTER_ACCESS));
-    TEST_EVAL(is_variable(tree->first_child, STR("ptr")));
-    TEST_EVAL(is_variable(tree->first_child->next_sibling, STR("field")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("ptr")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("field")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Function call - no arguments"))
   {
-    C_Node *tree = parse_expr(&arena, STR("foo()"));
+    C_Node *tree = parse_expression(&arena, STR("foo()"));
 
     TEST_EVAL(tree->type == C_NODE_FUNCTION_CALL);
     TEST_EVAL(string_match(tree->name, STR("foo")));
@@ -395,55 +407,55 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Function call - with arguments"))
   {
-    C_Node *tree = parse_expr(&arena, STR("foo(a, b)"));
+    C_Node *tree = parse_expression(&arena, STR("foo(a, b)"));
 
     TEST_EVAL(tree->type == C_NODE_FUNCTION_CALL);
     TEST_EVAL(string_match(tree->name, STR("foo")));
     TEST_EVAL(tree->child_count == 2);
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
-    TEST_EVAL(is_variable(tree->first_child->next_sibling, STR("b")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("b")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Ternary operator - basic"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a ? b : c"));
+    C_Node *tree = parse_expression(&arena, STR("a ? b : c"));
 
     TEST_EVAL(tree->type == C_NODE_TERNARY);
     TEST_EVAL(tree->child_count == 3);
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
-    TEST_EVAL(is_variable(tree->first_child->next_sibling, STR("b")));
-    TEST_EVAL(is_variable(tree->first_child->next_sibling->next_sibling, STR("c")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("b")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling->next_sibling, STR("c")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Ternary operator - nested (right associative)"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a ? b : c ? d : e"));
+    C_Node *tree = parse_expression(&arena, STR("a ? b : c ? d : e"));
 
     // Should be: a ? b : (c ? d : e)
     TEST_EVAL(tree->type == C_NODE_TERNARY);
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
-    TEST_EVAL(is_variable(tree->first_child->next_sibling, STR("b")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("b")));
 
     C_Node *false_branch = tree->first_child->next_sibling->next_sibling;
     TEST_EVAL(false_branch->type == C_NODE_TERNARY);
-    TEST_EVAL(is_variable(false_branch->first_child, STR("c")));
-    TEST_EVAL(is_variable(false_branch->first_child->next_sibling, STR("d")));
-    TEST_EVAL(is_variable(false_branch->first_child->next_sibling->next_sibling, STR("e")));
+    TEST_EVAL(is_identifier(false_branch->first_child, STR("c")));
+    TEST_EVAL(is_identifier(false_branch->first_child->next_sibling, STR("d")));
+    TEST_EVAL(is_identifier(false_branch->first_child->next_sibling->next_sibling, STR("e")));
 
     arena_clear(&arena);
   }
 
   TEST_BLOCK(STR("Ternary with assignment - precedence"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a = b ? c : d"));
+    C_Node *tree = parse_expression(&arena, STR("a = b ? c : d"));
 
     // Should be: a = (b ? c : d)
     TEST_EVAL(is_binary(tree, C_BINARY_ASSIGN));
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
 
     C_Node *right = tree->first_child->next_sibling;
     TEST_EVAL(right->type == C_NODE_TERNARY);
@@ -453,7 +465,7 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Complex expression"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a + b * c - d"));
+    C_Node *tree = parse_expression(&arena, STR("a + b * c - d"));
 
     // Should be: (a + (b * c)) - d
     TEST_EVAL(is_binary(tree, C_BINARY_SUBTRACT));
@@ -466,17 +478,17 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Comparison operators"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a < b"));
+    C_Node *tree = parse_expression(&arena, STR("a < b"));
     TEST_EVAL(is_binary(tree, C_BINARY_LESS_THAN));
 
     arena_clear(&arena);
 
-    tree = parse_expr(&arena, STR("a <= b"));
+    tree = parse_expression(&arena, STR("a <= b"));
     TEST_EVAL(is_binary(tree, C_BINARY_LESS_THAN_EQUAL));
 
     arena_clear(&arena);
 
-    tree = parse_expr(&arena, STR("a == b"));
+    tree = parse_expression(&arena, STR("a == b"));
     TEST_EVAL(is_binary(tree, C_BINARY_COMPARE_EQUAL));
 
     arena_clear(&arena);
@@ -484,12 +496,12 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Logical operators"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a && b"));
+    C_Node *tree = parse_expression(&arena, STR("a && b"));
     TEST_EVAL(is_binary(tree, C_BINARY_LOGICAL_AND));
 
     arena_clear(&arena);
 
-    tree = parse_expr(&arena, STR("a || b"));
+    tree = parse_expression(&arena, STR("a || b"));
     TEST_EVAL(is_binary(tree, C_BINARY_LOGICAL_OR));
 
     arena_clear(&arena);
@@ -497,11 +509,11 @@ int main(int argc, char **argv)
 
   TEST_BLOCK(STR("Logical operator precedence"))
   {
-    C_Node *tree = parse_expr(&arena, STR("a || b && c"));
+    C_Node *tree = parse_expression(&arena, STR("a || b && c"));
 
     // Should be: a || (b && c)
     TEST_EVAL(is_binary(tree, C_BINARY_LOGICAL_OR));
-    TEST_EVAL(is_variable(tree->first_child, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
 
     C_Node *right = tree->first_child->next_sibling;
     TEST_EVAL(is_binary(right, C_BINARY_LOGICAL_AND));
@@ -509,6 +521,163 @@ int main(int argc, char **argv)
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Variable declaration"))
+  {
+    String code = STR("int x;");
+    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+
+    TEST_EVAL(root->type == C_NODE_ROOT);
+    TEST_EVAL(root->child_count == 1);
+
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_VARIABLE_DECLARATION);
+    TEST_EVAL(decl->child_count == 2);
+
+    C_Node *type = decl->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE);
+    TEST_EVAL(string_match(type->name, STR("int")));
+
+    C_Node *name = decl->first_child->next_sibling;
+    TEST_EVAL(name->type == C_NODE_IDENTIFIER);
+    TEST_EVAL(string_match(name->name, STR("x")));
+
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Variable declaration - with initializer"))
+  {
+    String code = STR("int x = 42;");
+    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_VARIABLE_DECLARATION);
+    TEST_EVAL(decl->child_count == 3);
+
+    C_Node *type = decl->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE);
+    TEST_EVAL(string_match(type->name, STR("int")));
+
+    C_Node *name = decl->first_child->next_sibling;
+    TEST_EVAL(name->type == C_NODE_IDENTIFIER);
+    TEST_EVAL(string_match(name->name, STR("x")));
+
+    C_Node *init = decl->first_child->next_sibling->next_sibling;
+    TEST_EVAL(init->type == C_NODE_LITERAL);
+    TEST_EVAL(init->literal.integer.v == 42);
+
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Variable declaration - expression initializer"))
+  {
+    String code = STR("int result = a + b * 2;");
+    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->child_count == 3);
+
+    C_Node *init = decl->first_child->next_sibling->next_sibling;
+    TEST_EVAL(is_binary(init, C_BINARY_ADD));
+
+    // Check that b * 2 is properly nested
+    C_Node *right = init->first_child->next_sibling;
+    TEST_EVAL(is_binary(right, C_BINARY_MULTIPLY));
+
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Multiple variable declarations"))
+  {
+    String code = STR("int x; float y; char z;");
+    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+
+    TEST_EVAL(root->child_count == 3);
+
+    C_Node *decl1 = root->first_child;
+    TEST_EVAL(decl1->type == C_NODE_VARIABLE_DECLARATION);
+    TEST_EVAL(string_match(decl1->first_child->name, STR("int")));
+    TEST_EVAL(string_match(decl1->first_child->next_sibling->name, STR("x")));
+
+    C_Node *decl2 = decl1->next_sibling;
+    TEST_EVAL(decl2->type == C_NODE_VARIABLE_DECLARATION);
+    TEST_EVAL(string_match(decl2->first_child->name, STR("float")));
+    TEST_EVAL(string_match(decl2->first_child->next_sibling->name, STR("y")));
+
+    C_Node *decl3 = decl2->next_sibling;
+    TEST_EVAL(decl3->type == C_NODE_VARIABLE_DECLARATION);
+    TEST_EVAL(string_match(decl3->first_child->name, STR("char")));
+    TEST_EVAL(string_match(decl3->first_child->next_sibling->name, STR("z")));
+
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Different type keywords"))
+  {
+    String code = STR("void v; char c; short s; long l; double d;");
+    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+
+    TEST_EVAL(root->child_count == 5);
+
+    C_Node *curr = root->first_child;
+    TEST_EVAL(string_match(curr->first_child->name, STR("void")));
+
+    curr = curr->next_sibling;
+    TEST_EVAL(string_match(curr->first_child->name, STR("char")));
+
+    curr = curr->next_sibling;
+    TEST_EVAL(string_match(curr->first_child->name, STR("short")));
+
+    curr = curr->next_sibling;
+    TEST_EVAL(string_match(curr->first_child->name, STR("long")));
+
+    curr = curr->next_sibling;
+    TEST_EVAL(string_match(curr->first_child->name, STR("double")));
+
+    arena_clear(&arena);
+  }
+
+  // TEST_BLOCK(STR("Function declaration - no parameters"))
+  // {
+  //   String code = STR("int foo();");
+  //   C_Token_Array tokens = tokenize_c_code(&arena, code);
+  //   C_Node *root = parse_c_tokens(&arena, tokens);
+  //
+  //   TEST_EVAL(root->child_count == 1);
+  //
+  //   C_Node *func = root->first_child;
+  //   TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
+  //   TEST_EVAL(func->child_count == 3);
+  //
+  //   C_Node *return_type = func->first_child;
+  //   TEST_EVAL(return_type->type == C_NODE_TYPE);
+  //   TEST_EVAL(string_match(return_type->name, STR("int")));
+  //
+  //   C_Node *name = func->first_child->next_sibling;
+  //   TEST_EVAL(name->type == C_NODE_IDENTIFIER);
+  //   TEST_EVAL(string_match(name->name, STR("foo")));
+  //
+  //   C_Node *params = func->first_child->next_sibling->next_sibling;
+  //   TEST_EVAL(params->child_count == 0);
+  //
+  //   arena_clear(&arena);
+  // }
+
   tester_summarize();
+
+  String code = STR(
+    "int bumpo(int boo, int bar)\n"
+    "{\n"
+    "  int boobar = 0;\n"
+    "  boobar += boo * bar;\n"
+    "  return boobar * 2;\n"
+    "}\n"
+  );
+  print_code_tree(&arena, code);
+
   arena_free(&arena);
 }

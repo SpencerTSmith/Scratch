@@ -6,15 +6,18 @@
 #include "c_tokenize.h"
 
 // TODO:
+// - Better error reporting, show line, etc. have all the info just need to stitch together.
 // - IMPORTANT: Switch over completely to using nil node... no more NULL!
+// - Declarations
+//   - Struct
+//   - Enum
+//   - Typedef
 // - Statements
 //   - switch
-//   - do while
-//   - continue
-//   - break
 //   - labels
 // - Expressions
 //   - Compound literals
+//   - Casts
 //
 // - Will probably need to start having distinct types for links
 
@@ -40,6 +43,8 @@
   X(C_NODE_DO_WHILE)             \
   X(C_NODE_BREAK)                \
   X(C_NODE_CONTINUE)             \
+  X(C_NODE_SWITCH)               \
+  X(C_NODE_CASE)                 \
   X(C_NODE_COUNT)
 
 ENUM_TABLE(C_Node_Type);
@@ -871,6 +876,23 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
     } break;
     case C_TOKEN_KEYWORD_SWITCH:
     {
+      c_parse_eat(parser, C_TOKEN_KEYWORD_SWITCH);
+
+      result = c_new_node(arena, C_NODE_SWITCH);
+
+      if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
+      {
+        C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+        c_node_add_child(result, condition);
+
+        while (true)
+        {
+        }
+      }
+      else
+      {
+        c_parse_error(parser, "Expected an open parenthesis following switch.");
+      }
 
     } break;
     case C_TOKEN_KEYWORD_RETURN:
@@ -889,7 +911,6 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
     } break;
     case C_TOKEN_KEYWORD_GOTO:
     {
-
     } break;
     case C_TOKEN_KEYWORD_BREAK:
     {

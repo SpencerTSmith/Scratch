@@ -670,6 +670,10 @@ int main(int argc, char **argv)
   tester_summarize();
 
   String code = STR(
+    "void bumpo(float boo, int bar)\n"
+    "{\n"
+    "  boo++;"
+    "}\n"
     "int bumpo(int boo, int bar)\n"
     "{\n"
     "  int boobar = 0;\n"

@@ -38,6 +38,8 @@
   X(C_NODE_RETURN)               \
   X(C_NODE_FOR)                  \
   X(C_NODE_DO_WHILE)             \
+  X(C_NODE_BREAK)                \
+  X(C_NODE_CONTINUE)             \
   X(C_NODE_COUNT)
 
 ENUM_TABLE(C_Node_Type);
@@ -131,6 +133,8 @@ struct C_Parser
 {
   C_Token_Array tokens;
   usize at;
+
+  i32 curr_loop_nests;
 
   b32 had_error;
 };
@@ -735,6 +739,11 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       c_parse_eat(parser, peek.type);
       result = c_new_node(arena, peek.type == C_TOKEN_KEYWORD_IF ? C_NODE_IF : C_NODE_WHILE);
 
+      if (peek.type == C_TOKEN_KEYWORD_WHILE)
+      {
+        parser->curr_loop_nests += 1;
+      }
+
       if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
       {
         C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
@@ -765,11 +774,19 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         // FIXME: var args for this function so can pass if or while string to this message
         c_parse_error(parser, "Expected begin parenthesis following if or while.");
       }
+
+      if (peek.type == C_TOKEN_KEYWORD_WHILE)
+      {
+        parser->curr_loop_nests -= 1;
+      }
+
     } break;
     case C_TOKEN_KEYWORD_FOR:
     {
       c_parse_eat(parser, C_TOKEN_KEYWORD_FOR);
       result = c_new_node(arena, C_NODE_FOR);
+
+      parser->curr_loop_nests += 1;
 
       if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
       {
@@ -825,12 +842,16 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         c_parse_error(parser, "Expected begin parenthesis following for.");
       }
 
+      parser->curr_loop_nests -= 1;
+
     } break;
     case C_TOKEN_KEYWORD_DO:
     {
       c_parse_eat(parser, C_TOKEN_KEYWORD_DO);
 
       result = c_new_node(arena, C_NODE_DO_WHILE);
+
+      parser->curr_loop_nests += 1;
 
       C_Node *statement = c_parse_statement(arena, parser);
       c_node_add_child(result, statement);
@@ -844,6 +865,9 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       {
         c_parse_error(parser, "Expected while following do.");
       }
+
+      parser->curr_loop_nests -= 1;
+
     } break;
     case C_TOKEN_KEYWORD_SWITCH:
     {
@@ -860,7 +884,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
       {
         // FIXME: var args to report the right string
-        c_parse_error(parser, "Expected semicolon following return");
+        c_parse_error(parser, "Expected semicolon following return.");
       }
     } break;
     case C_TOKEN_KEYWORD_GOTO:
@@ -869,11 +893,40 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
     } break;
     case C_TOKEN_KEYWORD_BREAK:
     {
+      // TODO: Or in a switch.
+      if (parser->curr_loop_nests > 0)
+      {
+        c_parse_eat(parser, C_TOKEN_KEYWORD_BREAK);
 
+        result = c_new_node(arena, C_NODE_BREAK);
+
+        if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+        {
+          c_parse_error(parser, "Expected semicolon following break.");
+        }
+      }
+      else
+      {
+        c_parse_error(parser, "Break statement not in a loop or switch.");
+      }
     } break;
     case C_TOKEN_KEYWORD_CONTINUE:
     {
+      if (parser->curr_loop_nests > 0)
+      {
+        c_parse_eat(parser, C_TOKEN_KEYWORD_CONTINUE);
 
+        result = c_new_node(arena, C_NODE_CONTINUE);
+
+        if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+        {
+          c_parse_error(parser, "Expected semicolon following continue.");
+        }
+      }
+      else
+      {
+        c_parse_error(parser, "Break statement not in a loop or switch.");
+      }
     } break;
     case C_TOKEN_BEGIN_CURLY_BRACE:
     {

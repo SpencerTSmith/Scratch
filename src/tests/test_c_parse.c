@@ -686,6 +686,8 @@ int main(int argc, char **argv)
     "    boobar *= 2;\n"
     "  do\n"
     "  {\n"
+    "    continue;\n"
+    "    break;\n"
     "    boobar /= 2;\n"
     "  } while(boobar > 400)\n"
     "  return;\n"

@@ -33,6 +33,7 @@
   X(C_NODE_BLOCK)                \
   X(C_NODE_EXPRESSION_STATEMENT) \
   X(C_NODE_IF)                   \
+  X(C_NODE_ELSE)                 \
   X(C_NODE_WHILE)                \
   X(C_NODE_RETURN)               \
   X(C_NODE_FOR)                  \
@@ -742,6 +743,16 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         {
           C_Node *statement = c_parse_statement(arena, parser);
           c_node_add_child(result, statement);
+
+          // Check for else
+          if (c_parse_eat(parser, C_TOKEN_KEYWORD_ELSE))
+          {
+            C_Node *els = c_new_node(arena, C_NODE_ELSE);
+            c_node_add_child(result, els);
+
+            C_Node *else_statement = c_parse_statement(arena, parser);
+            c_node_add_child(els, else_statement);
+          }
         }
         else
         {
@@ -812,10 +823,6 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       {
         c_parse_error(parser, "Expected begin parenthesis following for.");
       }
-
-    } break;
-    case C_TOKEN_KEYWORD_ELSE:
-    {
 
     } break;
     case C_TOKEN_KEYWORD_DO:

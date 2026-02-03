@@ -684,6 +684,10 @@ int main(int argc, char **argv)
     "    boobar -= 1;\n"
     "  for (int i = 0;; i++)\n"
     "    boobar *= 2;\n"
+    "  do\n"
+    "  {\n"
+    "    boobar /= 2;\n"
+    "  } while(boobar > 400)\n"
     "  return;\n"
     "}\n"
   );

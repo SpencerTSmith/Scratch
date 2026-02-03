@@ -8,14 +8,14 @@
 // TODO:
 // - IMPORTANT: Switch over completely to using nil node... no more NULL!
 // - Statements
-//   - Blocks
-//   - for
-//   - while
-//   - if
 //   - switch
 //   - do while
+//   - continue
+//   - break
+//   - labels
 // - Expressions
 //   - Compound literals
+//
 // - Will probably need to start having distinct types for links
 
 #define C_Node_Type(X)           \
@@ -37,6 +37,7 @@
   X(C_NODE_WHILE)                \
   X(C_NODE_RETURN)               \
   X(C_NODE_FOR)                  \
+  X(C_NODE_DO_WHILE)             \
   X(C_NODE_COUNT)
 
 ENUM_TABLE(C_Node_Type);
@@ -827,7 +828,22 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
     } break;
     case C_TOKEN_KEYWORD_DO:
     {
+      c_parse_eat(parser, C_TOKEN_KEYWORD_DO);
 
+      result = c_new_node(arena, C_NODE_DO_WHILE);
+
+      C_Node *statement = c_parse_statement(arena, parser);
+      c_node_add_child(result, statement);
+
+      if (c_parse_eat(parser, C_TOKEN_KEYWORD_WHILE))
+      {
+        C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+        c_node_add_child(result, condition);
+      }
+      else
+      {
+        c_parse_error(parser, "Expected while following do.");
+      }
     } break;
     case C_TOKEN_KEYWORD_SWITCH:
     {

@@ -12,9 +12,6 @@
 //   - Struct
 //   - Enum
 //   - Typedef
-// - Statements
-//   - switch
-//   - labels
 // - Expressions
 //   - Compound literals
 //   - Casts
@@ -45,6 +42,7 @@
   X(C_NODE_CONTINUE)             \
   X(C_NODE_SWITCH)               \
   X(C_NODE_CASE)                 \
+  X(C_NODE_GOTO)                 \
   X(C_NODE_LABEL)                \
   X(C_NODE_COUNT)
 
@@ -968,6 +966,17 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
     } break;
     case C_TOKEN_KEYWORD_GOTO:
     {
+      c_parse_eat(parser, C_TOKEN_KEYWORD_GOTO);
+
+      result = c_new_node(arena, C_NODE_GOTO);
+
+      C_Node *label = c_parse_identifier(arena, parser);
+      c_node_add_child(result, label);
+
+      if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+      {
+        c_parse_error(parser, "Expected semicolon following goto label.");
+      }
     } break;
     case C_TOKEN_KEYWORD_BREAK:
     {
@@ -1017,7 +1026,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       result = c_parse_declaration(arena, parser, at_top_level);
 
       // We tried to parse a declaration and couldn't.
-      // So, this is most likely an expression statement or its just not a statement.
+      // So, this is most likely an expression statementor its just not a statement.
       if (result == c_nil_node())
       {
         result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
@@ -1135,11 +1144,11 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
   if (c_token_is_type_keyword(token))
   {
     C_Token peek0 = c_parse_peek_token(*parser, 1);
-    C_Token peek1 = c_parse_peek_token(*parser, 2);
 
     // Declaration, probably
     if (peek0.type == C_TOKEN_IDENTIFIER)
     {
+      C_Token peek1 = c_parse_peek_token(*parser, 2);
       // Function thing
       if (peek1.type == C_TOKEN_BEGIN_PARENTHESIS && at_top_level)
       {
@@ -1151,6 +1160,16 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
         result = c_parse_variable_declaration(arena, parser);
       }
     }
+  }
+  // Label
+  else if (token.type == C_TOKEN_IDENTIFIER &&
+           c_parse_peek_token(*parser, 1).type == C_TOKEN_COLON)
+  {
+    result = c_new_node(arena, C_NODE_LABEL);
+    C_Node *name = c_parse_identifier(arena, parser);
+    c_node_add_child(result, name);
+
+    c_parse_eat(parser, C_TOKEN_COLON);
   }
   else if (token.type == C_TOKEN_KEYWORD_STRUCT)
   {

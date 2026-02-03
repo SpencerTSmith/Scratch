@@ -45,6 +45,7 @@
   X(C_NODE_CONTINUE)             \
   X(C_NODE_SWITCH)               \
   X(C_NODE_CASE)                 \
+  X(C_NODE_LABEL)                \
   X(C_NODE_COUNT)
 
 ENUM_TABLE(C_Node_Type);
@@ -139,7 +140,8 @@ struct C_Parser
   C_Token_Array tokens;
   usize at;
 
-  i32 curr_loop_nests;
+  i32 loop_nests;
+  i32 switch_nests;
 
   b32 had_error;
 };
@@ -445,7 +447,8 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
       // Keep going until we consume a close parenthesis.
       while (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
       {
-        C_Node *argument = c_parse_expression(arena, parser, 1); // FIXME: Don't want commas to act as operators... but this seems non-explicit
+        // Pass precedence of comma so that we stop parsing at comma.
+        C_Node *argument = c_parse_expression(arena, parser, token_to_node_table[C_TOKEN_COMMA].binary_precedence);
         c_node_add_child(result, argument);
 
         // Skip comma
@@ -746,7 +749,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
 
       if (peek.type == C_TOKEN_KEYWORD_WHILE)
       {
-        parser->curr_loop_nests += 1;
+        parser->loop_nests += 1;
       }
 
       if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
@@ -782,7 +785,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
 
       if (peek.type == C_TOKEN_KEYWORD_WHILE)
       {
-        parser->curr_loop_nests -= 1;
+        parser->loop_nests -= 1;
       }
 
     } break;
@@ -791,7 +794,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       c_parse_eat(parser, C_TOKEN_KEYWORD_FOR);
       result = c_new_node(arena, C_NODE_FOR);
 
-      parser->curr_loop_nests += 1;
+      parser->loop_nests += 1;
 
       if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
       {
@@ -847,7 +850,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         c_parse_error(parser, "Expected begin parenthesis following for.");
       }
 
-      parser->curr_loop_nests -= 1;
+      parser->loop_nests -= 1;
 
     } break;
     case C_TOKEN_KEYWORD_DO:
@@ -856,7 +859,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
 
       result = c_new_node(arena, C_NODE_DO_WHILE);
 
-      parser->curr_loop_nests += 1;
+      parser->loop_nests += 1;
 
       C_Node *statement = c_parse_statement(arena, parser);
       c_node_add_child(result, statement);
@@ -871,7 +874,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         c_parse_error(parser, "Expected while following do.");
       }
 
-      parser->curr_loop_nests -= 1;
+      parser->loop_nests -= 1;
 
     } break;
     case C_TOKEN_KEYWORD_SWITCH:
@@ -885,8 +888,28 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
         c_node_add_child(result, condition);
 
-        while (true)
+        if (c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
         {
+          parser->switch_nests += 1;
+
+          // Begin parsing case statement(s).
+          // Multiple cases must be contained with a block.
+          C_Node *statement = c_parse_statement(arena, parser);
+
+          if (statement->type == C_NODE_CASE || statement->type == C_NODE_BLOCK)
+          {
+            c_node_add_child(result, statement);
+          }
+          else
+          {
+            c_parse_error(parser, "Invalid statement type following switch.");
+          }
+
+          parser->switch_nests -= 1;
+        }
+        else
+        {
+          c_parse_error(parser, "Expected close parenthesis following switch condition.");
         }
       }
       else
@@ -894,6 +917,40 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         c_parse_error(parser, "Expected an open parenthesis following switch.");
       }
 
+    } break;
+    case C_TOKEN_KEYWORD_CASE:
+    {
+      if (parser->switch_nests > 0)
+      {
+        c_parse_eat(parser, C_TOKEN_KEYWORD_CASE);
+        result = c_new_node(arena, C_NODE_CASE);
+
+        C_Node *match_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+        c_node_add_child(result, match_expression);
+
+        if (c_parse_eat(parser, C_TOKEN_COLON))
+        {
+          C_Token case_or_close_maybe = c_parse_peek_token(*parser, 0);
+
+          // TODO: This seems not great to be checking for close curly here.
+          while (case_or_close_maybe.type != C_TOKEN_KEYWORD_CASE &&
+                 case_or_close_maybe.type != C_TOKEN_CLOSE_CURLY_BRACE)
+          {
+            C_Node *statement = c_parse_statement(arena, parser);
+            c_node_add_child(result, statement);
+
+            case_or_close_maybe = c_parse_peek_token(*parser, 0);
+          }
+        }
+        else
+        {
+          c_parse_error(parser, "Expected colon following case match expression.");
+        }
+      }
+      else
+      {
+        c_parse_error(parser, "Case statement without enclosing switch.");
+      }
     } break;
     case C_TOKEN_KEYWORD_RETURN:
     {
@@ -914,8 +971,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
     } break;
     case C_TOKEN_KEYWORD_BREAK:
     {
-      // TODO: Or in a switch.
-      if (parser->curr_loop_nests > 0)
+      if (parser->loop_nests > 0 || parser->switch_nests > 0)
       {
         c_parse_eat(parser, C_TOKEN_KEYWORD_BREAK);
 
@@ -933,7 +989,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
     } break;
     case C_TOKEN_KEYWORD_CONTINUE:
     {
-      if (parser->curr_loop_nests > 0)
+      if (parser->loop_nests > 0)
       {
         c_parse_eat(parser, C_TOKEN_KEYWORD_CONTINUE);
 

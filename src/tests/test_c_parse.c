@@ -154,7 +154,7 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
     }
     printf("\n");
 
-    for (C_Node *child = node->first_child; child; child = child->next_sibling)
+    for (C_Node *child = node->first_child; child && child != c_nil_node(); child = child->next_sibling)
     {
       print_c_ast(child, depth, depth + 1);
     }
@@ -641,31 +641,31 @@ int main(int argc, char **argv)
     arena_clear(&arena);
   }
 
-  // TEST_BLOCK(STR("Function declaration - no parameters"))
-  // {
-  //   String code = STR("int foo();");
-  //   C_Token_Array tokens = tokenize_c_code(&arena, code);
-  //   C_Node *root = parse_c_tokens(&arena, tokens);
-  //
-  //   TEST_EVAL(root->child_count == 1);
-  //
-  //   C_Node *func = root->first_child;
-  //   TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
-  //   TEST_EVAL(func->child_count == 3);
-  //
-  //   C_Node *return_type = func->first_child;
-  //   TEST_EVAL(return_type->type == C_NODE_TYPE);
-  //   TEST_EVAL(string_match(return_type->name, STR("int")));
-  //
-  //   C_Node *name = func->first_child->next_sibling;
-  //   TEST_EVAL(name->type == C_NODE_IDENTIFIER);
-  //   TEST_EVAL(string_match(name->name, STR("foo")));
-  //
-  //   C_Node *params = func->first_child->next_sibling->next_sibling;
-  //   TEST_EVAL(params->child_count == 0);
-  //
-  //   arena_clear(&arena);
-  // }
+  TEST_BLOCK(STR("Function declaration - no parameters"))
+  {
+    String code = STR("int foo();");
+    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+
+    TEST_EVAL(root->child_count == 1);
+
+    C_Node *func = root->first_child;
+    TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
+    TEST_EVAL(func->child_count == 2);
+
+    C_Node *return_type = func->first_child;
+    TEST_EVAL(return_type->type == C_NODE_TYPE);
+    TEST_EVAL(string_match(return_type->name, STR("int")));
+
+    C_Node *name = func->first_child->next_sibling;
+    TEST_EVAL(name->type == C_NODE_IDENTIFIER);
+    TEST_EVAL(string_match(name->name, STR("foo")));
+
+    // C_Node *params = func->first_child->next_sibling->next_sibling;
+    // TEST_EVAL(params->child_count == 0);
+
+    arena_clear(&arena);
+  }
 
   tester_summarize();
 
@@ -675,8 +675,12 @@ int main(int argc, char **argv)
     "  int boobar = 0;\n"
     "  boobar += boo * bar;\n"
     "  if (boobar > 0)\n"
-    "    boobar += 1; \n"
-    "  return boobar * 2;\n"
+    "    boobar -= 1; \n"
+    "  while (boobar > 0)\n"
+    "    boobar -= 1;\n"
+    "  for (int i = 0;; i++)\n"
+    "    boobar *= 2;\n"
+    "  return;\n"
     "}\n"
   );
   print_code_tree(&arena, code);

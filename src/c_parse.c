@@ -6,6 +6,7 @@
 #include "c_tokenize.h"
 
 // TODO:
+// - IMPORTANT: Switch over completely to using nil node... no more NULL!
 // - Statements
 //   - Blocks
 //   - for
@@ -15,6 +16,7 @@
 //   - do while
 // - Expressions
 //   - Compound literals
+// - Will probably need to start having distinct types for links
 
 #define C_Node_Type(X)           \
   X(C_NODE_NONE)                 \
@@ -31,7 +33,9 @@
   X(C_NODE_BLOCK)                \
   X(C_NODE_EXPRESSION_STATEMENT) \
   X(C_NODE_IF)                   \
+  X(C_NODE_WHILE)                \
   X(C_NODE_RETURN)               \
+  X(C_NODE_FOR)                  \
   X(C_NODE_COUNT)
 
 ENUM_TABLE(C_Node_Type);
@@ -325,7 +329,7 @@ b32 c_parse_match(C_Parser *parser, C_Token_Type type)
 }
 
 static
-b32 c_parse_consume(C_Parser *parser, C_Token_Type type)
+b32 c_parse_eat(C_Parser *parser, C_Token_Type type)
 {
   b32 result = false;
 
@@ -374,7 +378,13 @@ C_Node *c_nil_node()
 {
   static C_Node nil = {0};
 
-  c_node_add_child(&nil, &nil);
+  static b32 init = false;
+
+  if (!init)
+  {
+    c_node_add_child(&nil, &nil);
+    init = true;
+  }
 
   return &nil;
 }
@@ -382,16 +392,16 @@ C_Node *c_nil_node()
 static
 C_Node *c_parse_identifier(Arena *arena, C_Parser *parser)
 {
-  C_Node *result = arena_new(arena, C_Node);
+  C_Node *result = c_nil_node();
 
   C_Token token = c_parse_peek_token(*parser, 0);
 
   if (token.type == C_TOKEN_IDENTIFIER)
   {
-    result->type = C_NODE_IDENTIFIER;
+    result = c_new_node(arena, C_NODE_IDENTIFIER);
     result->name = token.raw;
 
-    c_parse_consume(parser, C_TOKEN_IDENTIFIER);
+    c_parse_eat(parser, C_TOKEN_IDENTIFIER);
   }
   else
   {
@@ -417,18 +427,18 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 
     result->name = identifier.raw;
 
-    c_parse_consume(parser, C_TOKEN_IDENTIFIER);
+    c_parse_eat(parser, C_TOKEN_IDENTIFIER);
 
-    if (c_parse_consume(parser, C_TOKEN_BEGIN_PARENTHESIS))
+    if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
     {
       // Keep going until we consume a close parenthesis.
-      while (!c_parse_consume(parser, C_TOKEN_CLOSE_PARENTHESIS))
+      while (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
       {
         C_Node *argument = c_parse_expression(arena, parser, 1); // FIXME: Don't want commas to act as operators... but this seems non-explicit
         c_node_add_child(result, argument);
 
         // Skip comma
-        c_parse_consume(parser, C_TOKEN_COMMA);
+        c_parse_eat(parser, C_TOKEN_COMMA);
       }
     }
     else
@@ -458,7 +468,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 
     result->literal = token.literal; // Copy over
 
-    c_parse_consume(parser, C_TOKEN_LITERAL);
+    c_parse_eat(parser, C_TOKEN_LITERAL);
   }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {
@@ -481,7 +491,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     b32 is_post = false;
 
     result->unary = c_token_to_unary(token, is_post);
-    c_parse_consume(parser, token.type);
+    c_parse_eat(parser, token.type);
 
     b32 is_unary = true;
     i32 precedence = c_operator_precedence(token, is_unary, is_post);
@@ -490,12 +500,12 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
   }
   else if (token.type == C_TOKEN_BEGIN_PARENTHESIS)
   {
-    c_parse_consume(parser, C_TOKEN_BEGIN_PARENTHESIS);
+    c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS);
 
     // Reset as if this expression is all by itself by passing the min precedence
     result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
 
-    if (!c_parse_consume(parser, C_TOKEN_CLOSE_PARENTHESIS))
+    if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
     {
       c_parse_error(parser, "Expected close parenthesis");
     }
@@ -531,7 +541,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
         result = c_new_node(arena, C_NODE_BINARY);
         result->binary = operator;
 
-        c_parse_consume(parser, peek.type);
+        c_parse_eat(parser, peek.type);
 
         // We act like the inner expression of array access is surrounded by parenthesis
         if (operator == C_BINARY_ARRAY_ACCESS)
@@ -544,7 +554,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
         // For array access, skip over the subsequent close square brace
         if (operator == C_BINARY_ARRAY_ACCESS)
         {
-          if(!c_parse_consume(parser, C_TOKEN_CLOSE_SQUARE_BRACE))
+          if(!c_parse_eat(parser, C_TOKEN_CLOSE_SQUARE_BRACE))
           {
             c_parse_error(parser, "Expected closing square brace for array access");
           }
@@ -574,7 +584,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 
         result->unary = c_token_to_unary(peek, is_post);
 
-        c_parse_consume(parser, peek.type);
+        c_parse_eat(parser, peek.type);
 
         c_node_add_child(result, left);
       }
@@ -607,7 +617,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
   if (post_peek.type == C_TOKEN_QUESTION &&
       c_operator_precedence(post_peek, false, false) >= min_precedence)
   {
-    c_parse_consume(parser, C_TOKEN_QUESTION);
+    c_parse_eat(parser, C_TOKEN_QUESTION);
 
     // We know what we have so far is the condition for the ternary.
     C_Node *condition = result;
@@ -620,7 +630,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
     C_Node *true_expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(result, true_expression);
 
-    if (!c_parse_consume(parser, C_TOKEN_COLON))
+    if (!c_parse_eat(parser, C_TOKEN_COLON))
     {
       c_parse_error(parser, "Expected colon after 2nd ternary argument.");
     }
@@ -635,19 +645,20 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
   return result;
 }
 
+// TODO: Type cache
 static
 C_Node *c_parse_type(Arena *arena, C_Parser *parser)
 {
-  C_Node *result = arena_new(arena, C_Node);
+  C_Node *result = c_nil_node();
 
   C_Token token = c_parse_peek_token(*parser, 0);
 
   if (c_token_is_type_keyword(token))
   {
-    result->type = C_NODE_TYPE;
+    result = c_new_node(arena, C_NODE_TYPE);
     result->name = token.raw; // Hehehe, nice to just do this
 
-    c_parse_consume(parser, token.type);
+    c_parse_eat(parser, token.type);
   }
   else if (token.type == C_TOKEN_IDENTIFIER) // Custom type
   {
@@ -678,10 +689,11 @@ C_Node *c_parse_declarator(Arena *arena, C_Parser *parser, C_Node_Type type)
 static
 C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
 {
+  // TODO: Comma separations for multiple variable decls
   C_Node *result = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
 
   // If we see an equal sign, grab initializing expression
-  if (c_parse_consume(parser, C_TOKEN_ASSIGN))
+  if (c_parse_eat(parser, C_TOKEN_ASSIGN))
   {
     C_Node *expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(result, expression); // Third child is initializing expression, if present
@@ -692,10 +704,9 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
     }
   }
 
-  // Need a closing ;
-  if (!c_parse_consume(parser, C_TOKEN_SEMICOLON))
+  if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
   {
-    c_parse_error(parser, "Declaration without subsequent semicolon");
+    c_parse_error(parser, "Expected semicolon following top level variable declaration.");
   }
 
   return result;
@@ -715,37 +726,92 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
   C_Token peek = c_parse_peek_token(*parser, 0);
   switch (peek.type)
   {
+    // Basically same case.
+    case C_TOKEN_KEYWORD_WHILE:
     case C_TOKEN_KEYWORD_IF:
     {
-      c_parse_consume(parser, C_TOKEN_KEYWORD_IF);
-      result = c_new_node(arena, C_NODE_IF);
+      c_parse_eat(parser, peek.type);
+      result = c_new_node(arena, peek.type == C_TOKEN_KEYWORD_IF ? C_NODE_IF : C_NODE_WHILE);
 
-      if (c_parse_consume(parser, C_TOKEN_BEGIN_PARENTHESIS))
+      if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
       {
         C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
         c_node_add_child(result, condition);
 
-        if (c_parse_consume(parser, C_TOKEN_CLOSE_PARENTHESIS))
+        if (c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
         {
           C_Node *statement = c_parse_statement(arena, parser);
           c_node_add_child(result, statement);
         }
         else
         {
-          c_parse_error(parser, "Expected close parenthesis following if condition expression.");
+          c_parse_error(parser, "Expected close parenthesis following condition expression.");
         }
       }
       else
       {
-        c_parse_error(parser, "Expected begin parenthesis following if.");
+        // FIXME: var args for this function so can pass if or while string to this message
+        c_parse_error(parser, "Expected begin parenthesis following if or while.");
       }
-    } break;
-    case C_TOKEN_KEYWORD_WHILE:
-    {
-
     } break;
     case C_TOKEN_KEYWORD_FOR:
     {
+      c_parse_eat(parser, C_TOKEN_KEYWORD_FOR);
+      result = c_new_node(arena, C_NODE_FOR);
+
+      if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
+      {
+        // First part is decl or expression
+        C_Node *init = c_parse_variable_declaration(arena, parser);
+
+        // Try to parse as expression if not a declaration
+        if (init == c_nil_node())
+        {
+          init = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+
+          // Grab a semicolon, only for expression, as parse_variable_declaration will grab the semicolon in that case.
+          if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+          {
+            c_parse_error(parser, "Expected semicolon following first initialization loop clause.");
+            // Should continue after failing this?
+          }
+        }
+        c_node_add_child(result, init);
+
+
+        C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+        // FIXME: Don't like this... probably should just start making actual types to put in the node union
+        if (condition != c_nil_node())
+        {
+          c_node_add_child(result, condition);
+        }
+
+        if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+        {
+          c_parse_error(parser, "Expected semicolon following second condition loop clause.");
+          // Should continue after failing this?
+        }
+
+        C_Node *update = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+        // FIXME: Don't like this... probably should just start making actual types to put in the node union
+        if (update != c_nil_node())
+        {
+          c_node_add_child(result, update);
+        }
+
+        if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
+        {
+          c_parse_error(parser, "Expected semicolon following third update loop clause.");
+          // Should continue after failing this?
+        }
+
+        C_Node *statement = c_parse_statement(arena, parser);
+        c_node_add_child(result, statement);
+      }
+      else
+      {
+        c_parse_error(parser, "Expected begin parenthesis following for.");
+      }
 
     } break;
     case C_TOKEN_KEYWORD_ELSE:
@@ -762,11 +828,17 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
     } break;
     case C_TOKEN_KEYWORD_RETURN:
     {
-      c_parse_consume(parser, C_TOKEN_KEYWORD_RETURN);
+      c_parse_eat(parser, C_TOKEN_KEYWORD_RETURN);
       result = c_new_node(arena, C_NODE_RETURN);
 
       C_Node *expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
       c_node_add_child(result, expression);
+
+      if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+      {
+        // FIXME: var args to report the right string
+        c_parse_error(parser, "Expected semicolon following return");
+      }
     } break;
     case C_TOKEN_KEYWORD_GOTO:
     {
@@ -777,10 +849,6 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
 
     } break;
     case C_TOKEN_KEYWORD_CONTINUE:
-    {
-
-    } break;
-    case C_TOKEN_KEYWORD_CASE:
     {
 
     } break;
@@ -801,15 +869,17 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       {
         result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
 
-        // If we got a valid expression back, expect a semicolon.
+        // If we got a valid expression back, eat a semicolon.
         if (result != c_nil_node())
         {
-          if (!c_parse_consume(parser, C_TOKEN_SEMICOLON))
+          if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
           {
-            c_parse_error(parser, "Expected semicolon following expression.");
+            // FIXME: var args to report the right string
+            c_parse_error(parser, "Expected semicolon following declaration");
           }
         }
       }
+
     } break;
   }
 
@@ -821,7 +891,7 @@ C_Node *c_parse_block(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_new_node(arena, C_NODE_BLOCK);
 
-  if (c_parse_consume(parser, C_TOKEN_BEGIN_CURLY_BRACE))
+  if (c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE))
   {
     while (true)
     {
@@ -834,9 +904,9 @@ C_Node *c_parse_block(Arena *arena, C_Parser *parser)
       c_node_add_child(result, statement);
     }
 
-    if (!c_parse_consume(parser, C_TOKEN_CLOSE_CURLY_BRACE))
+    if (!c_parse_eat(parser, C_TOKEN_CLOSE_CURLY_BRACE))
     {
-      c_parse_error(parser, "Expected closing curling brace for block statement.");
+      c_parse_error(parser, "Expected closing curly brace for block statement.");
     }
   }
   else
@@ -852,7 +922,7 @@ C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_parse_declarator(arena, parser, C_NODE_FUNCTION_DECLARATION);
 
-  if (!c_parse_consume(parser, C_TOKEN_BEGIN_PARENTHESIS))
+  if (!c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
   {
     c_parse_error(parser, "Expected open parenthesis for function declaration");
   }
@@ -866,10 +936,10 @@ C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser)
       C_Node *parameter = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
       c_node_add_child(result, parameter);
     }
-    while (c_parse_consume(parser, C_TOKEN_COMMA));
+    while (c_parse_eat(parser, C_TOKEN_COMMA));
   }
 
-  if (!c_parse_consume(parser, C_TOKEN_CLOSE_PARENTHESIS))
+  if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
   {
     c_parse_error(parser, "Expected close parenthesis for function declaration");
   }
@@ -881,7 +951,7 @@ C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser)
     c_node_add_child(result, definition);
   }
   // Or a semicolon
-  else if (!c_parse_consume(parser, C_TOKEN_SEMICOLON))
+  else if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
   {
     c_parse_error(parser, "Expected semicolon or function definition block.");
   }
@@ -946,7 +1016,6 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
 static
 C_Node *parse_c_tokens(Arena *arena, C_Token_Array tokens)
 {
-
   C_Node *root = c_new_node(arena, C_NODE_ROOT);
 
   C_Parser parser =

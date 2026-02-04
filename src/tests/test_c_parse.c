@@ -674,12 +674,16 @@ int main(int argc, char **argv)
     // "{\n"
     // "  boo++;"
     // "}\n"
-    "int bumpo(int boo, int bar)\n"
+    "struct Foo\n"
     "{\n"
-    "  test:\n"
-    "  goto test;\n"
-    "  return;\n"
+    "  int bar;\n"
     "}\n"
+    // "int bumpo(int boo, int bar)\n"
+    // "{\n"
+    // "  test:\n"
+    // "  goto test;\n"
+    // "  return;\n"
+    // "}\n"
   );
   print_code_tree(&arena, code);
 

@@ -25,13 +25,13 @@
   X(C_NODE_LITERAL)              \
   X(C_NODE_ROOT)                 \
   X(C_NODE_VARIABLE_DECLARATION) \
+  X(C_NODE_STRUCT_DECLARATION)   \
   X(C_NODE_FUNCTION_DECLARATION) \
   X(C_NODE_UNARY)                \
   X(C_NODE_BINARY)               \
   X(C_NODE_TERNARY)              \
   X(C_NODE_FUNCTION_CALL)        \
   X(C_NODE_BLOCK)                \
-  X(C_NODE_EXPRESSION_STATEMENT) \
   X(C_NODE_IF)                   \
   X(C_NODE_ELSE)                 \
   X(C_NODE_WHILE)                \
@@ -1124,7 +1124,43 @@ C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser)
 static
 C_Node *c_parse_struct_declaration(Arena *arena, C_Parser *parser)
 {
-  return c_nil_node();
+  C_Node *result = c_nil_node();
+
+  if (c_parse_eat(parser, C_TOKEN_KEYWORD_STRUCT))
+  {
+    result = c_new_node(arena, C_NODE_STRUCT_DECLARATION);
+
+    // Non-anonymous struct.
+    if (c_parse_match(parser, C_TOKEN_IDENTIFIER))
+    {
+      C_Node *name = c_parse_identifier(arena, parser);
+      c_node_add_child(result, name);
+    }
+
+    if (!c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE))
+    {
+      c_parse_error(parser, "Expected begin curly brace following struct declaration.");
+    }
+
+    // Consume struct members
+    while (!c_parse_eat(parser, C_TOKEN_CLOSE_CURLY_BRACE))
+    {
+      C_Node *member = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
+      c_node_add_child(result, member);
+
+      if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+      {
+        c_parse_error(parser, "Expected semicolon following struct member declaration.");
+        break;
+      }
+    }
+  }
+  else
+  {
+    c_parse_error(parser, "Expected struct keyword to begin struct declaration.");
+  }
+
+  return result;
 }
 
 static

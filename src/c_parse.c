@@ -8,12 +8,13 @@
 // FIXME:
 // - IMPORTANT: Switch over completely to using nil node... no more NULL!
 // - Better error reporting, show line, etc. have all the info just need to stitch together.
-// - Will probably need to start having distinct types for links
+// - Will probably need to start having distinct types for statement links, once start actually using the AST
 //
 // TODO:
 // - Functionality:
-//   - Statements
-//     - Typedef
+//   - Type parsing
+//     - Caching these
+//   - Symbol Table
 //   - Expressions
 //     - Compound literals
 
@@ -27,6 +28,7 @@
   X(C_NODE_STRUCT_DECLARATION)   \
   X(C_NODE_ENUM_DECLARATION)     \
   X(C_NODE_FUNCTION_DECLARATION) \
+  X(C_NODE_TYPEDEF)              \
   X(C_NODE_UNARY)                \
   X(C_NODE_BINARY)               \
   X(C_NODE_TERNARY)              \
@@ -1193,6 +1195,7 @@ C_Node *c_parse_struct_declaration(Arena *arena, C_Parser *parser)
   return result;
 }
 
+// TODO: Can factor this and struct parsing into same function probably, just a few things different.
 static
 C_Node *c_parse_enum_declaration(Arena *arena, C_Parser *parser)
 {
@@ -1303,6 +1306,23 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
     if (!at_top_level && !c_parse_eat(parser, C_TOKEN_SEMICOLON))
     {
       c_parse_error(parser, "Expected semicolon following non-top-level enum declaration");
+    }
+  }
+  else if (token.type == C_TOKEN_KEYWORD_TYPEDEF)
+  {
+    c_parse_eat(parser, C_TOKEN_KEYWORD_TYPEDEF);
+
+    result = c_new_node(arena, C_NODE_TYPEDEF);
+
+    C_Node *type = c_parse_type(arena, parser);
+    c_node_add_child(result, type);
+
+    C_Node *alias = c_parse_identifier(arena, parser);
+    c_node_add_child(result, alias);
+
+    if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+    {
+      c_parse_error(parser, "Expected semicolon following typedef statement.");
     }
   }
 

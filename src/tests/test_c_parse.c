@@ -671,6 +671,7 @@ int main(int argc, char **argv)
   tester_summarize();
 
   String code = STR(
+    "typedef float foo;\n"
     "void test(float boo, int bar)\n"
     "{\n"
     "  int boo = (float)boo + foo;"

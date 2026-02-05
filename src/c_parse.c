@@ -5,18 +5,19 @@
 
 #include "c_tokenize.h"
 
-// TODO:
-// - Better error reporting, show line, etc. have all the info just need to stitch together.
+// FIXME:
 // - IMPORTANT: Switch over completely to using nil node... no more NULL!
-// - Declarations
-//   - Struct
-//   - Enum
-//   - Typedef
-// - Expressions
-//   - Compound literals
-//   - Casts
-//
+// - Better error reporting, show line, etc. have all the info just need to stitch together.
 // - Will probably need to start having distinct types for links
+//
+// TODO:
+// - Functionality:
+//   - Statements
+//     - Enum
+//     - Typedef
+//   - Expressions
+//     - Compound literals
+//     - Casts
 
 #define C_Node_Type(X)           \
   X(C_NODE_NONE)                 \
@@ -26,6 +27,7 @@
   X(C_NODE_ROOT)                 \
   X(C_NODE_VARIABLE_DECLARATION) \
   X(C_NODE_STRUCT_DECLARATION)   \
+  X(C_NODE_ENUM_DECLARATION)     \
   X(C_NODE_FUNCTION_DECLARATION) \
   X(C_NODE_UNARY)                \
   X(C_NODE_BINARY)               \
@@ -416,7 +418,7 @@ C_Node *c_parse_identifier(Arena *arena, C_Parser *parser)
   }
   else
   {
-    c_parse_error(parser, "Tried to parse non-identifier token as variable");
+    c_parse_error(parser, "Tried to parse non-identifier token as variable.");
   }
 
   return result;
@@ -1137,27 +1139,33 @@ C_Node *c_parse_struct_declaration(Arena *arena, C_Parser *parser)
       c_node_add_child(result, name);
     }
 
-    if (!c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE))
+    // Grab definition if there.
+    if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
     {
-      c_parse_error(parser, "Expected begin curly brace following struct declaration.");
-    }
-
-    // Consume struct members
-    while (!c_parse_eat(parser, C_TOKEN_CLOSE_CURLY_BRACE))
-    {
-      C_Node *member = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
-      c_node_add_child(result, member);
-
-      if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+      if (c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE))
       {
-        c_parse_error(parser, "Expected semicolon following struct member declaration.");
-        break;
+        // Consume struct members
+        while (!c_parse_eat(parser, C_TOKEN_CLOSE_CURLY_BRACE))
+        {
+          C_Node *member = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
+          c_node_add_child(result, member);
+
+          if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+          {
+            c_parse_error(parser, "Expected semicolon following struct member declaration.");
+            break;
+          }
+        }
+      }
+      else
+      {
+        c_parse_error(parser, "Expected begin curly brace following struct declaration.");
       }
     }
   }
   else
   {
-    c_parse_error(parser, "Expected struct keyword to begin struct declaration.");
+    c_parse_error(parser, "Tried to parse struct declaration without beginning struct token.");
   }
 
   return result;
@@ -1166,7 +1174,56 @@ C_Node *c_parse_struct_declaration(Arena *arena, C_Parser *parser)
 static
 C_Node *c_parse_enum_declaration(Arena *arena, C_Parser *parser)
 {
-  return c_nil_node();
+  C_Node *result = c_nil_node();
+
+  if (c_parse_eat(parser, C_TOKEN_KEYWORD_ENUM))
+  {
+    result = c_new_node(arena, C_NODE_ENUM_DECLARATION);
+
+    // Non-anonymous enum.
+    if (c_parse_match(parser, C_TOKEN_IDENTIFIER))
+    {
+      C_Node *name = c_parse_identifier(arena, parser);
+      c_node_add_child(result, name);
+    }
+
+    // Grab definition if there.
+    if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+    {
+      if (c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE))
+      {
+        // Consume enum members
+        while (!c_parse_eat(parser, C_TOKEN_CLOSE_CURLY_BRACE))
+        {
+          C_Node *member = c_parse_identifier(arena, parser);
+          c_node_add_child(result, member);
+
+          if (c_parse_eat(parser, C_TOKEN_ASSIGN))
+          {
+            // Don't want commas at this level to act like operators.
+            C_Node *member_expression = c_parse_expression(arena, parser, token_to_node_table[C_TOKEN_COMMA].binary_precedence);
+            c_node_add_child(member, member_expression);
+          }
+
+          if (!c_parse_eat(parser, C_TOKEN_COMMA))
+          {
+            c_parse_error(parser, "Expected comma following enum member declaration.");
+            break;
+          }
+        }
+      }
+      else
+      {
+        c_parse_error(parser, "Expected begin curly brace following enum declaration.");
+      }
+    }
+  }
+  else
+  {
+    c_parse_error(parser, "Tried to parse enum declaration without beginning enum token.");
+  }
+
+  return result;
 }
 
 static
@@ -1210,15 +1267,25 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
   else if (token.type == C_TOKEN_KEYWORD_STRUCT)
   {
     result = c_parse_struct_declaration(arena, parser);
+
+    // Check for semi-colon if not at top level
+    if (!at_top_level && !c_parse_eat(parser, C_TOKEN_SEMICOLON))
+    {
+      c_parse_error(parser, "Expected semicolon following non-top-level struct declaration");
+    }
   }
   else if (token.type == C_TOKEN_KEYWORD_ENUM)
   {
     result = c_parse_enum_declaration(arena, parser);
+
+    if (!at_top_level && !c_parse_eat(parser, C_TOKEN_SEMICOLON))
+    {
+      c_parse_error(parser, "Expected semicolon following non-top-level enum declaration");
+    }
   }
 
   return result;
 }
-
 
 // Returns root node
 static
@@ -1237,6 +1304,11 @@ C_Node *parse_c_tokens(Arena *arena, C_Token_Array tokens)
     b32 at_top_level = true;
     C_Node *declaration = c_parse_declaration(arena, &parser, at_top_level);
     c_node_add_child(root, declaration);
+
+    if (declaration == c_nil_node())
+    {
+      break;
+    }
   }
 
   return root;

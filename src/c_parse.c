@@ -13,11 +13,9 @@
 // TODO:
 // - Functionality:
 //   - Statements
-//     - Enum
 //     - Typedef
 //   - Expressions
 //     - Compound literals
-//     - Casts
 
 #define C_Node_Type(X)           \
   X(C_NODE_NONE)                 \

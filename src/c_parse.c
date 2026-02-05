@@ -107,6 +107,7 @@ typedef enum C_Unary
   C_UNARY_DEREFERENCE,
   C_UNARY_BITWISE_NOT,
   C_UNARY_LOGICAL_NOT,
+  C_UNARY_CAST,
 
   C_UNARY_COUNT,
 } C_Unary;
@@ -400,6 +401,29 @@ C_Node *c_nil_node()
   }
 
   return &nil;
+
+}
+
+// TODO: Type cache
+static
+C_Node *c_parse_type(Arena *arena, C_Parser *parser)
+{
+  C_Node *result = c_nil_node();
+
+  C_Token token = c_parse_peek_token(*parser, 0);
+
+  if (c_token_is_type_keyword(token))
+  {
+    result = c_new_node(arena, C_NODE_TYPE);
+    result->name = token.raw; // Hehehe, nice to just do this
+
+    c_parse_eat(parser, token.type);
+  }
+  else if (token.type == C_TOKEN_IDENTIFIER) // Custom type
+  {
+  }
+
+  return result;
 }
 
 static
@@ -512,16 +536,42 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     C_Node *child = c_parse_expression(arena, parser, precedence);
     c_node_add_child(result, child);
   }
+  // TODO: Check for cast
   else if (token.type == C_TOKEN_BEGIN_PARENTHESIS)
   {
     c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS);
 
-    // Reset as if this expression is all by itself by passing the min precedence
-    result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    // Check if we can parse this as a type.
+    C_Node *type = c_parse_type(arena, parser);
 
-    if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
+    // It is a unary cast if we were able to parse a type..
+    if (type != c_nil_node())
     {
-      c_parse_error(parser, "Expected close parenthesis");
+      result = c_new_node(arena, C_NODE_UNARY);
+      result->unary = C_UNARY_CAST;
+
+      c_node_add_child(result, type);
+
+      if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
+      {
+        c_parse_error(parser, "Expected close parenthesis following cast.");
+      }
+
+      // FIXME: pass unary precedence in a good way, perhaps factor unary creation out into a function
+      C_Node *child = c_parse_expression(arena, parser, 14);
+      c_node_add_child(type, child);
+    }
+
+    // Its an expression
+    else
+    {
+      // Parenthesis resets precedence
+      result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+
+      if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
+      {
+        c_parse_error(parser, "Expected close parenthesis following expression.");
+      }
     }
   }
 
@@ -654,32 +704,6 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
     i32 ternary_precedence = c_operator_precedence(post_peek, false, false);
     C_Node *false_expression = c_parse_expression(arena, parser, ternary_precedence);
     c_node_add_child(result, false_expression);
-  }
-
-  return result;
-}
-
-// TODO: Type cache
-static
-C_Node *c_parse_type(Arena *arena, C_Parser *parser)
-{
-  C_Node *result = c_nil_node();
-
-  C_Token token = c_parse_peek_token(*parser, 0);
-
-  if (c_token_is_type_keyword(token))
-  {
-    result = c_new_node(arena, C_NODE_TYPE);
-    result->name = token.raw; // Hehehe, nice to just do this
-
-    c_parse_eat(parser, token.type);
-  }
-  else if (token.type == C_TOKEN_IDENTIFIER) // Custom type
-  {
-  }
-  else
-  {
-    c_parse_error(parser, "Tried to create type node with non-type keyword or identifier token.");
   }
 
   return result;
@@ -1200,7 +1224,7 @@ C_Node *c_parse_enum_declaration(Arena *arena, C_Parser *parser)
 
           if (c_parse_eat(parser, C_TOKEN_ASSIGN))
           {
-            // Don't want commas at this level to act like operators.
+            // Don't want commas at this level to act like operators, so pass comma's precedence
             C_Node *member_expression = c_parse_expression(arena, parser, token_to_node_table[C_TOKEN_COMMA].binary_precedence);
             c_node_add_child(member, member_expression);
           }

@@ -132,6 +132,7 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
           case C_UNARY_DEREFERENCE:    { printf("*"); } break;
           case C_UNARY_BITWISE_NOT:    { printf("~"); }  break;
           case C_UNARY_LOGICAL_NOT:    { printf("!"); } break;
+          case C_UNARY_CAST:           { printf("CAST"); } break;
         }
       }
       break;
@@ -670,25 +671,10 @@ int main(int argc, char **argv)
   tester_summarize();
 
   String code = STR(
-    "void bumpo(float boo, int bar)\n"
+    "void test(float boo, int bar)\n"
     "{\n"
-      "struct\n"
-      "{\n"
-      "  int bar;\n"
-      "};\n"
-    "  boo++;"
+    "  int boo = (float)boo + foo;"
     "}\n"
-    "enum Types\n"
-    "{\n"
-    "  TYPE_1 = 1 + 1,\n"
-    "  TYPE_1,\n"
-    "};\n"
-    // "int bumpo(int boo, int bar)\n"
-    // "{\n"
-    // "  test:\n"
-    // "  goto test;\n"
-    // "  return;\n"
-    // "}\n"
   );
   print_code_tree(&arena, code);
 

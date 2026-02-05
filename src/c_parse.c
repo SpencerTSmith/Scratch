@@ -14,7 +14,7 @@
 // - Functionality:
 //   - Type parsing
 //     - Caching these
-//   - Symbol Table
+//   - Symbol Table(s)
 //   - Expressions
 //     - Compound literals
 
@@ -23,6 +23,7 @@
   X(C_NODE_IDENTIFIER)           \
   X(C_NODE_TYPE)                 \
   X(C_NODE_LITERAL)              \
+  X(C_NODE_COMPOUND_LITERAL)     \
   X(C_NODE_ROOT)                 \
   X(C_NODE_VARIABLE_DECLARATION) \
   X(C_NODE_STRUCT_DECLARATION)   \
@@ -507,6 +508,33 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     result->literal = token.literal; // Copy over
 
     c_parse_eat(parser, C_TOKEN_LITERAL);
+  }
+  else if (token.type == C_TOKEN_BEGIN_CURLY_BRACE)
+  {
+    c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE);
+
+    // TODO: Maybe can consolidate compound literal with normal literals
+    result = c_new_node(arena, C_NODE_COMPOUND_LITERAL);
+
+    while (!c_parse_eat(parser, C_TOKEN_CLOSE_CURLY_BRACE))
+    {
+      C_Node *initializer = c_nil_node();
+      // Designated initializer
+      if (c_parse_eat(parser, C_TOKEN_DOT))
+      {
+      }
+      // Positional initializer
+      else
+      {
+        // Commas must act like separators so pass it's precedence
+        initializer = c_parse_expression(arena, parser, token_to_node_table[C_TOKEN_COMMA].binary_precedence);
+      }
+
+      c_node_add_child(result, initializer);
+
+      // Skip comma separators
+      c_parse_eat(parser, C_TOKEN_COMMA);
+    }
   }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {

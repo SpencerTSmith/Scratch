@@ -675,6 +675,7 @@ int main(int argc, char **argv)
     "void test(float boo, int bar)\n"
     "{\n"
     "  int boo = (float)boo + foo;"
+    "  int boo = {1, 2+2, 3};"
     "}\n"
   );
   print_code_tree(&arena, code);

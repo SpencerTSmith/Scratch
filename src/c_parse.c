@@ -522,6 +522,25 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
       // Designated initializer
       if (c_parse_eat(parser, C_TOKEN_DOT))
       {
+        initializer = c_parse_identifier(arena, parser);
+
+        if (initializer == c_nil_node())
+        {
+          c_parse_error(parser, "Expected identifier following . in designated initializer");
+          break;
+        }
+
+        if(c_parse_eat(parser, C_TOKEN_ASSIGN))
+        {
+          C_Node *expression = c_parse_expression(arena, parser, token_to_node_table[C_TOKEN_COMMA].binary_precedence);
+          c_node_add_child(initializer, expression);
+        }
+        else
+        {
+          // FIXME: Once have var args messages, pass the name of identifier
+          c_parse_error(parser, "Expected assignment following designated initializer");
+          break;
+        }
       }
       // Positional initializer
       else

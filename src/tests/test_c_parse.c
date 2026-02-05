@@ -674,8 +674,9 @@ int main(int argc, char **argv)
     "typedef float foo;\n"
     "void test(float boo, int bar)\n"
     "{\n"
-    "  int boo = (float)boo + foo;"
-    "  int boo = {1, 2+2, 3};"
+    // "  int boo = (float)boo + foo;"
+    // "  int boo = {1, 2+2, 3};"
+    "  int boo = {.a = 1, .b = 2+2, 3};"
     "}\n"
   );
   print_code_tree(&arena, code);

@@ -425,9 +425,12 @@ void arena_clear(Arena *arena);
   !(first) ? ((new_node)->next = 0, (first) = (last) = (new_node)) : \
    ((last)->next = (new_node), (new_node)->next = 0, (last) = (new_node))
 
-#define DLL_push_last(first, last, new_node, next, prev)                   \
-  !(first) ? ((new_node)->next = 0, (new_node)->prev = 0, (first) = (last) = (new_node)) : \
-   ((last)->next = (new_node), (new_node)->next = 0, (new_node)->prev = (last), (last) = (new_node))
+#define DLL_push_last_nil(first, last, new_node, next, prev, nil)                          \
+  (first) == nil ? ((new_node)->next = nil, (new_node)->prev = nil, (first) = (last) = (new_node)) : \
+   ((last)->next = (new_node), (new_node)->next = nil, (new_node)->prev = (last), (last) = (new_node))
+
+#define DLL_push_last(first, last, new_node, next, prev) \
+  DLL_push_last_nil((first), (last), (new_node), (next), (prev), (nil))
 
 // Helpers specific to the DEFINE_LIST() structures, that is, they assume the naming
 // scheme and also increment the count

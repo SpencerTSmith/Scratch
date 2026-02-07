@@ -15,8 +15,6 @@
 //   - Type parsing
 //     - Caching these
 //   - Symbol Table(s)
-//   - Expressions
-//     - Compound literals
 
 #define C_Node_Type(X)           \
   X(C_NODE_NONE)                 \
@@ -114,6 +112,16 @@ typedef enum C_Unary
 } C_Unary;
 
 typedef struct C_Node C_Node;
+
+// Just for acceleration, that is, don't need to traverse the child linked list.
+typedef struct C_Statement_Links C_Statement_Links;
+struct C_Statement_Links
+{
+  C_Node *init;
+  C_Node *condition;
+  C_Node *update;
+};
+
 struct C_Node
 {
   C_Node_Type type;
@@ -126,6 +134,8 @@ struct C_Node
 
   C_Node *next_sibling;
   C_Node *prev_sibling;
+
+  C_Statement_Links links;
 
   union
   {
@@ -365,28 +375,7 @@ void c_parse_error(C_Parser *parser, char *message)
 }
 
 static
-C_Node *c_new_node(Arena *arena, C_Node_Type type)
-{
-  C_Node *result = arena_new(arena, C_Node);
-  result->type = type;
-
-  return result;
-}
-
-static
-void c_node_add_child(C_Node *parent, C_Node *child)
-{
-  child->parent = parent;
-
-  DLL_push_last(parent->first_child, parent->last_child, child, next_sibling, prev_sibling);
-  parent->child_count += 1;
-}
-
-static
-b32 c_parse_incomplete(C_Parser parser)
-{
-  return parser.at < parser.tokens.count && !parser.had_error;
-}
+void c_node_add_child(C_Node *parent, C_Node *child);
 
 static
 C_Node *c_nil_node()
@@ -402,7 +391,36 @@ C_Node *c_nil_node()
   }
 
   return &nil;
+}
 
+static
+C_Node *c_new_node(Arena *arena, C_Node_Type type)
+{
+  C_Node *result = arena_new(arena, C_Node);
+  result->type = type;
+
+  result->first_child  = c_nil_node();
+  result->last_child   = c_nil_node();
+  result->next_sibling = c_nil_node();
+  result->prev_sibling = c_nil_node();
+
+  return result;
+}
+
+static
+void c_node_add_child(C_Node *parent, C_Node *child)
+{
+  child->parent = parent;
+
+  DLL_push_last_nil(parent->first_child, parent->last_child,
+                    child, next_sibling, prev_sibling, c_nil_node());
+  parent->child_count += 1;
+}
+
+static
+b32 c_parse_incomplete(C_Parser parser)
+{
+  return parser.at < parser.tokens.count && !parser.had_error;
 }
 
 // TODO: Type cache
@@ -885,14 +903,15 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
           }
         }
         c_node_add_child(result, init);
+        result->links.init = init;
 
 
         C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
-        // FIXME: Don't like this... probably should just start making actual types to put in the node union
         if (condition != c_nil_node())
         {
           c_node_add_child(result, condition);
         }
+        result->links.condition = condition;
 
         if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
         {
@@ -901,11 +920,11 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         }
 
         C_Node *update = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
-        // FIXME: Don't like this... probably should just start making actual types to put in the node union
         if (update != c_nil_node())
         {
           c_node_add_child(result, update);
         }
+        result->links.update = update;
 
         if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
         {
@@ -922,7 +941,6 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       }
 
       parser->loop_nests -= 1;
-
     } break;
     case C_TOKEN_KEYWORD_DO:
     {
@@ -939,6 +957,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       {
         C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
         c_node_add_child(result, condition);
+        result->links.condition = condition;
       }
       else
       {

@@ -54,10 +54,22 @@ typedef float  f32;
 typedef size_t    usize;
 typedef ptrdiff_t isize;
 
+#ifndef __cplusplus
 #define true  1
 #define false 0
+#endif
 
+#ifdef __cplusplus
+#define ZERO_INIT {}
+#else
+#define ZERO_INIT {0}
+#endif
+
+#ifdef __cplusplus
+#define thread_static thread_local
+#else
 #define thread_static _Thread_local
+#endif
 
 #define _CONCAT(a, b) a##b
 #define CONCAT(a, b) _CONCAT(a, b)
@@ -402,14 +414,16 @@ void arena_clear(Arena *arena);
 // Only works when building contiguously, IE use a linked list (Type_List), or rethink, if can't guarantee that
 // May add relocation later... but maybe not
 // Probably also slower than needs to be as we need to go through alloc path for individual elements
-#define array_add(a, array, new)                                                                 \
+#define array_add(a, array, new_item)                                                            \
   !((array).v) ?                                                                                 \
     ((array).v = arena_alloc((a), sizeof((array).v[0]), alignof((array).v[0])),                  \
-     (array).v[(array).count++] = (new),                                                         \
+     (array).v[(array).count++] = (new_item),                                                    \
      (array).v + (array).count - 1)                                                              \
   : arena_alloc((a), sizeof((array).v[0]), alignof((array).v[0])) == (array).v + (array).count ? \
-    ((array).v[(array).count++] = (new), (array).v + (array).count - 1)                          \
+    ((array).v[(array).count++] = (new_item), (array).v + (array).count - 1)                     \
   : (LOG_ERROR("Tried to add to array in arena noncontiguously!"), arena_pop(a, sizeof((array).v[0])), (void *)0)
+
+#define arena_array_add(a, array, new_item) array_add((a), (array), (new_item))
 
 // Linked list Helpers ---
 
@@ -869,7 +883,7 @@ usize string_find_substring(String string, usize start, String substring)
 
 String_Array string_split(Arena *arena, String string, String delimiter)
 {
-  String_Array result = {0};
+  String_Array result = ZERO_INIT;
 
   usize start = 0;
   for (usize delimiter_idx = string_find_substring(string, 0, delimiter);
@@ -877,7 +891,7 @@ String_Array string_split(Arena *arena, String string, String delimiter)
        delimiter_idx = string_find_substring(string, start, delimiter))
   {
     String substring = string_substring(string, start, delimiter_idx);
-    array_add(arena, result, substring);
+    arena_array_add(arena, result, substring);
 
     start = delimiter_idx + delimiter.count;
   }
@@ -887,7 +901,7 @@ String_Array string_split(Arena *arena, String string, String delimiter)
 
 String_Array string_split_whitepace(Arena *arena, String string)
 {
-  String_Array result = {0};
+  String_Array result = ZERO_INIT;
 
   for (usize i = 0; i < string.count;)
   {
@@ -912,7 +926,7 @@ String_Array string_split_whitepace(Arena *arena, String string)
     if (start < stop) // No empties
     {
       String substring = string_substring(string, start, stop);
-      array_add(arena, result, substring);
+      arena_array_add(arena, result, substring);
     }
 
     i = stop + 1;
@@ -923,7 +937,7 @@ String_Array string_split_whitepace(Arena *arena, String string)
 
 String string_join_array(Arena *arena, String_Array array, String separator)
 {
-  String result = {0};
+  String result = ZERO_INIT;
 
   // Perhaps the string data structures ought to just carry around this info so don't need to do a count pass
   usize array_total_char_count = 0;
@@ -962,7 +976,7 @@ String string_join_array(Arena *arena, String_Array array, String separator)
 
 String string_join_list(Arena *arena, String_List list, String separator)
 {
-  String result = {0};
+  String result = ZERO_INIT;
 
   // Perhaps the string data structures ought to just carry around this info so don't need to do a count pass
   usize list_total_char_count = 0;
@@ -1096,7 +1110,7 @@ Arena __arena_make(Arena_Args *args)
   usize com = ALIGN_POW2_UP(args->commit_size,  KB(4));
   ASSERT(res >= com, "Reserve size must be greater than or equal to commit size.");
 
-  Arena arena = {0};
+  Arena arena = ZERO_INIT;
 
   arena.base = (u8 *)os_allocate(res, (OS_Allocation_Flags)0);
 
@@ -1267,7 +1281,7 @@ Arg_Option *insert_arg_option(Arena *arena, Args *args, String name, String_Arra
 
 Args parse_args(Arena *arena, usize count, char **arguments)
 {
-  Args result = {0};
+  Args result = ZERO_INIT;
   result.program_name = string_from_c_string(arguments[0]);
 
   result.option_table_count = 64;

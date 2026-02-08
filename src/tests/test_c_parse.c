@@ -662,9 +662,6 @@ int main(int argc, char **argv)
     TEST_EVAL(name->type == C_NODE_IDENTIFIER);
     TEST_EVAL(string_match(name->name, STR("foo")));
 
-    // C_Node *params = func->first_child->next_sibling->next_sibling;
-    // TEST_EVAL(params->child_count == 0);
-
     arena_clear(&arena);
   }
 
@@ -674,8 +671,6 @@ int main(int argc, char **argv)
     "typedef float foo;\n"
     "void test(float boo, int bar)\n"
     "{\n"
-    // "  int boo = (float)boo + foo;"
-    // "  int boo = {1, 2+2, 3};"
     "  int boo = {.a = 1, .b = 2+2, 3};"
     "}\n"
   );

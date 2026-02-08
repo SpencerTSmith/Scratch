@@ -386,7 +386,10 @@ C_Node *c_nil_node()
 
   if (!init)
   {
-    c_node_add_child(&nil, &nil);
+    nil.first_child  = &nil;
+    nil.last_child   = &nil;
+    nil.next_sibling = &nil;
+    nil.prev_sibling = &nil;
     init = true;
   }
 
@@ -399,6 +402,7 @@ C_Node *c_new_node(Arena *arena, C_Node_Type type)
   C_Node *result = arena_new(arena, C_Node);
   result->type = type;
 
+  result->parent       = c_nil_node();
   result->first_child  = c_nil_node();
   result->last_child   = c_nil_node();
   result->next_sibling = c_nil_node();

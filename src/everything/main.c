@@ -18,13 +18,13 @@ int main(int argc, char **argv)
                                       WhitePixel(display, DefaultScreen(display)));
 
   XSelectInput(display, window,
-                ExposureMask |
-                KeyPressMask |
-                KeyReleaseMask |
-                ButtonPressMask |
-                ButtonReleaseMask |
-                PointerMotionMask |
-                StructureNotifyMask);
+               ExposureMask       |
+               KeyPressMask       |
+               KeyReleaseMask     |
+               ButtonPressMask    |
+               ButtonReleaseMask  |
+               PointerMotionMask  |
+               StructureNotifyMask);
 
   XMapWindow(display, window);
 

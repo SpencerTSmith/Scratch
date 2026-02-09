@@ -448,6 +448,15 @@ int main(int argc, char **argv)
     TEST_EVAL(string_match(ws_split.v[2], String("baz")));
   }
 
+  TEST_BLOCK(STR("string_formatted"))
+  {
+    String test = STR("Hello, sailor");
+    String form = string_formatted(&arena, "%s", "Hello, sailor");
+    printf("Test: %.*s\nForm: %.*s\n", STRF(test), STRF(form));
+    TEST_EVAL(test.count == form.count);
+    TEST_EVAL(string_match(test, form));
+  }
+
   tester_summarize();
 
   arena_free(&arena);

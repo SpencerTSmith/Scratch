@@ -60,12 +60,6 @@ typedef ptrdiff_t isize;
 #endif
 
 #ifdef __cplusplus
-#define ZERO_INIT {}
-#else
-#define ZERO_INIT {0}
-#endif
-
-#ifdef __cplusplus
 #define thread_static thread_local
 #else
 #define thread_static _Thread_local
@@ -504,6 +498,8 @@ String_Array string_split_whitepace(Arena *arena, String string);
 String string_join_array(Arena *arena, String_Array array, String separator);
 String string_join_list(Arena *arena, String_List list, String separator);
 
+String string_formatted(Arena *arena, const char* format, ...);
+
 // Only useful if you know exactly how big the file is ahead of time, otherwise probably put on an arena if don't know...
 // or use file_size()
 usize read_file_to_memory(const char *name, u8 *buffer, usize buffer_size);
@@ -883,7 +879,7 @@ usize string_find_substring(String string, usize start, String substring)
 
 String_Array string_split(Arena *arena, String string, String delimiter)
 {
-  String_Array result = ZERO_INIT;
+  String_Array result = {0};
 
   usize start = 0;
   for (usize delimiter_idx = string_find_substring(string, 0, delimiter);
@@ -901,7 +897,7 @@ String_Array string_split(Arena *arena, String string, String delimiter)
 
 String_Array string_split_whitepace(Arena *arena, String string)
 {
-  String_Array result = ZERO_INIT;
+  String_Array result = {0};
 
   for (usize i = 0; i < string.count;)
   {
@@ -937,7 +933,7 @@ String_Array string_split_whitepace(Arena *arena, String string)
 
 String string_join_array(Arena *arena, String_Array array, String separator)
 {
-  String result = ZERO_INIT;
+  String result = {0};
 
   // Perhaps the string data structures ought to just carry around this info so don't need to do a count pass
   usize array_total_char_count = 0;
@@ -976,7 +972,7 @@ String string_join_array(Arena *arena, String_Array array, String separator)
 
 String string_join_list(Arena *arena, String_List list, String separator)
 {
-  String result = ZERO_INIT;
+  String result = {0};
 
   // Perhaps the string data structures ought to just carry around this info so don't need to do a count pass
   usize list_total_char_count = 0;
@@ -1005,6 +1001,33 @@ String string_join_list(Arena *arena, String_List list, String separator)
       cursor += separator.count;
     }
   }
+
+  return result;
+}
+
+String string_formatted(Arena *arena, const char* format, ...)
+{
+  // Need 2 copies since using a var args will empty it out?!
+  va_list var_args0;
+  va_start(var_args0, format);
+
+  // It returns the # of characters minus the null terminator it wants to stomp down.
+  // Add 1, so that it won't stomp the null terminator over the last actually desired character.
+  usize wish_size = vsnprintf(0, 0, format, var_args0) + 1;
+
+  va_end(var_args0);
+
+  va_list var_args1;
+  va_start(var_args1, format);
+
+  String result =
+  {
+    .v = arena_calloc(arena, wish_size, u8),
+  };
+
+  result.count = vsnprintf((char *)result.v, wish_size, format, var_args1);
+
+  va_end(var_args1);
 
   return result;
 }
@@ -1110,7 +1133,7 @@ Arena __arena_make(Arena_Args *args)
   usize com = ALIGN_POW2_UP(args->commit_size,  KB(4));
   ASSERT(res >= com, "Reserve size must be greater than or equal to commit size.");
 
-  Arena arena = ZERO_INIT;
+  Arena arena = {0};
 
   arena.base = (u8 *)os_allocate(res, (OS_Allocation_Flags)0);
 
@@ -1281,7 +1304,7 @@ Arg_Option *insert_arg_option(Arena *arena, Args *args, String name, String_Arra
 
 Args parse_args(Arena *arena, usize count, char **arguments)
 {
-  Args result = ZERO_INIT;
+  Args result = {0};
   result.program_name = string_from_c_string(arguments[0]);
 
   result.option_table_count = 64;

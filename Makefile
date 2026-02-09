@@ -36,7 +36,7 @@ address-anatomy: bin-folder
 tests: test-common test-arguments test-c-tokenize test-linear-algebra test-c-parse
 
 test-cpp-compat: bin-folder
-	g++ ${ON_WARNINGS} src/tests/test_cpp_compat.cpp -o bin/test_cpp_compat.x
+	g++ ${ON_WARNINGS} -Wno-missing-field-initializers src/tests/test_cpp_compat.cpp -o bin/test_cpp_compat.x
 	bin/test_cpp_compat.x
 
 test-common: bin-folder

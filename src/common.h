@@ -1169,7 +1169,6 @@ void *arena_alloc(Arena *arena, usize size, usize alignment) {
   ASSERT(arena->base, "Arena memory is null");
 
   usize aligned_offset = ALIGN_POW2_UP(arena->next_offset, alignment);
-  void *ptr = arena->base + aligned_offset;
 
   usize wish_capacity = aligned_offset + size;
 
@@ -1188,12 +1187,9 @@ void *arena_alloc(Arena *arena, usize size, usize alignment) {
     arena->commit_size = wish_commit_size;
   }
 
-  // If we either had the needed memory already, or could commit more
-  if (ptr)
-  {
-    ZERO_SIZE(ptr, size);
-    arena->next_offset = wish_capacity;
-  }
+  void *ptr = arena->base + aligned_offset;
+  ZERO_SIZE(ptr, size);
+  arena->next_offset = wish_capacity;
 
   return ptr;
 }

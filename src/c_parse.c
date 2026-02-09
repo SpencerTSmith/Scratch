@@ -6,7 +6,6 @@
 #include "c_tokenize.h"
 
 // FIXME:
-// - IMPORTANT: Switch over completely to using nil node... no more NULL!
 // - Better error reporting, show line, etc. have all the info just need to stitch together.
 // - Will probably need to start having distinct types for statement links, once start actually using the AST
 //

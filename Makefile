@@ -33,6 +33,10 @@ address-anatomy: bin-folder
 	${CC} ${CFLAGS} src/address_anatomy.c -o bin/address_anatomy.x
 	bin/address_anatomy.x
 
+everything:
+	${CC} ${CFLAGS} -lX11 src/everything/main.c -o bin/everything.x
+	bin/everything.x
+
 tests: test-common test-arguments test-c-tokenize test-linear-algebra test-c-parse
 
 test-cpp-compat: bin-folder

@@ -284,7 +284,7 @@ void c_lexer_eat_whitespace_comments_preprocessor(C_Lexer *lexer)
 }
 
 static
-C_Token_Array tokenize_c_code(Arena *arena, String code)
+C_Tokenize_Result tokenize_c_code(Arena *arena, String code)
 {
   C_Token_Chunk_List chunks = {0};
 
@@ -659,12 +659,14 @@ C_Token_Array tokenize_c_code(Arena *arena, String code)
   }
 
   // Put into contiguous array for nice interface in parsing
-  C_Token_Array result = {0};
+  C_Tokenize_Result result = {0};
+  result.source = code;
+
   for (C_Token_Chunk *chunk = chunks.first; chunk; chunk = chunk->link_next)
   {
     for (usize i = 0; i < chunk->count; i++)
     {
-      array_add(arena, result, chunk->values[i]);
+      arena_array_add(arena, result.tokens, chunk->values[i]);
     }
   }
 

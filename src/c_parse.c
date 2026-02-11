@@ -148,8 +148,10 @@ struct C_Node
 typedef struct C_Parser C_Parser;
 struct C_Parser
 {
+  String source;
+
   C_Token_Array tokens;
-  usize at;
+  usize         at;
 
   i32 loop_nests;
   i32 switch_nests;
@@ -366,10 +368,67 @@ b32 c_parse_eat(C_Parser *parser, C_Token_Type type)
   return result;
 }
 
+// TODO: Maybe consider splitting source by line before-hand...
+// though hopefully this will only be needed for error reporting.
 static
-void c_parse_error(C_Parser *parser, char *message)
+String c_get_line(String source, usize wish_line)
 {
-  LOG_ERROR(message);
+  usize substring_start = 0;
+  usize substring_close = 0;
+
+  b32 found_line = false;
+
+  usize current_line = 1;
+  for (usize char_index = 0; char_index < source.count; char_index++)
+  {
+    u8 c = source.v[char_index];
+
+    if (c == '\n')
+    {
+      current_line += 1;
+      continue;
+    }
+
+    if (current_line == wish_line)
+    {
+      if (!found_line)
+      {
+        substring_start = char_index;
+        substring_close = char_index;
+        found_line = true;
+      }
+      else
+      {
+        substring_close += 1;
+      }
+    }
+
+    if (found_line && current_line != wish_line)
+    {
+      break;
+    }
+  }
+
+  return string_substring(source, substring_start, substring_close);
+}
+
+static
+void c_parse_error(C_Parser *parser, char *format, ...)
+{
+  C_Token current_token = c_parse_peek_token(*parser, 0);
+
+  usize line_number = current_token.line;
+  String line = c_get_line(parser->source, line_number);
+
+  printf("Parse Error, line %lu:\n", line_number);
+
+  va_list var_args;
+  va_start(var_args, format);
+  vprintf(format, var_args);
+  va_end(var_args);
+
+  printf("\n :: %.*s\n", STRF(line));
+
   parser->had_error = true;
 }
 
@@ -1400,13 +1459,14 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
 
 // Returns root node
 static
-C_Node *parse_c_tokens(Arena *arena, C_Token_Array tokens)
+C_Node *parse_c_tokens(Arena *arena, C_Tokenize_Result tokenize_result)
 {
   C_Node *root = c_new_node(arena, C_NODE_ROOT);
 
   C_Parser parser =
   {
-    .tokens = tokens,
+    .source = tokenize_result.source,
+    .tokens = tokenize_result.tokens,
     .at = 0,
   };
 

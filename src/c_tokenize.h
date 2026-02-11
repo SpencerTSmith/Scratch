@@ -153,7 +153,15 @@ struct C_Lexer
 DEFINE_ARRAY(C_Token);
 DEFINE_CHUNK_LIST(C_Token, 4096);
 
+typedef struct C_Tokenize_Result C_Tokenize_Result;
+struct C_Tokenize_Result
+{
+  String        source;
+  C_Token_Array tokens;
+  b32           had_error;
+};
+
 static
-C_Token_Array tokenize_c_code(Arena *arena, String code);
+C_Tokenize_Result tokenize_c_code(Arena *arena, String code);
 
 #endif // C_TOKENIZE

@@ -165,15 +165,15 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
 static
 void print_code_tree(Arena *arena, String code)
 {
-  C_Token_Array tokens = tokenize_c_code(arena, code);
+  C_Tokenize_Result tokens = tokenize_c_code(arena, code);
   print_c_ast(parse_c_tokens(arena, tokens), 0, 0);
 }
 
 static
 C_Node *parse_expression(Arena *arena, String code)
 {
-  C_Token_Array tokens = tokenize_c_code(arena, code);
-  C_Parser parser = { .tokens = tokens, .at = 0 };
+  C_Tokenize_Result tokens = tokenize_c_code(arena, code);
+  C_Parser parser = { .tokens = tokens.tokens, .at = 0 };
 
   return c_parse_expression(arena, &parser, C_MIN_PRECEDENCE);
 }
@@ -525,7 +525,7 @@ int main(int argc, char **argv)
   TEST_BLOCK(STR("Variable declaration"))
   {
     String code = STR("int x;");
-    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
     C_Node *root = parse_c_tokens(&arena, tokens);
 
     TEST_EVAL(root->type == C_NODE_ROOT);
@@ -549,7 +549,7 @@ int main(int argc, char **argv)
   TEST_BLOCK(STR("Variable declaration - with initializer"))
   {
     String code = STR("int x = 42;");
-    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
     C_Node *root = parse_c_tokens(&arena, tokens);
 
     C_Node *decl = root->first_child;
@@ -574,7 +574,7 @@ int main(int argc, char **argv)
   TEST_BLOCK(STR("Variable declaration - expression initializer"))
   {
     String code = STR("int result = a + b * 2;");
-    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
     C_Node *root = parse_c_tokens(&arena, tokens);
 
     C_Node *decl = root->first_child;
@@ -593,7 +593,7 @@ int main(int argc, char **argv)
   TEST_BLOCK(STR("Multiple variable declarations"))
   {
     String code = STR("int x; float y; char z;");
-    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
     C_Node *root = parse_c_tokens(&arena, tokens);
 
     TEST_EVAL(root->child_count == 3);
@@ -619,7 +619,7 @@ int main(int argc, char **argv)
   TEST_BLOCK(STR("Different type keywords"))
   {
     String code = STR("void v; char c; short s; long l; double d;");
-    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
     C_Node *root = parse_c_tokens(&arena, tokens);
 
     TEST_EVAL(root->child_count == 5);
@@ -645,7 +645,7 @@ int main(int argc, char **argv)
   TEST_BLOCK(STR("Function declaration - no parameters"))
   {
     String code = STR("int foo();");
-    C_Token_Array tokens = tokenize_c_code(&arena, code);
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
     C_Node *root = parse_c_tokens(&arena, tokens);
 
     TEST_EVAL(root->child_count == 1);
@@ -671,7 +671,7 @@ int main(int argc, char **argv)
     "typedef float foo;\n"
     "void test(float boo, int bar)\n"
     "{\n"
-    "  int boo = {.a = 1, .b = 2+2, 3};"
+    "  int boo = .a = 1, .b = 2+2, 3};"
     "}\n"
   );
   print_code_tree(&arena, code);

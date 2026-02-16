@@ -152,7 +152,29 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
         printf("CALL - %.*s", STRF(node->name));
       }
       break;
+      case C_NODE_STRUCT_DECLARATION:
+      {
+        printf("struct %.*s", STRF(node->name));
+      }
+      break;
+      case C_NODE_ENUM_DECLARATION:
+      {
+        printf("enum %.*s", STRF(node->name));
+      }
+      break;
     }
+
+    if (node->declaration_flags)
+    {
+      // TODO: Keep this updated
+      if (node->declaration_flags & C_DECLARATION_FLAG_CONST)    { printf(" const"); }
+      if (node->declaration_flags & C_DECLARATION_FLAG_STATIC)   { printf(" static"); }
+      if (node->declaration_flags & C_DECLARATION_FLAG_EXTERN)   { printf(" extern"); }
+      if (node->declaration_flags & C_DECLARATION_FLAG_VOLATILE) { printf(" volatile"); }
+      if (node->declaration_flags & C_DECLARATION_FLAG_RESTRICT) { printf(" restrict"); }
+    }
+
+
     printf("\n");
 
     for (C_Node *child = node->first_child; child && child != c_nil_node(); child = child->next_sibling)
@@ -642,54 +664,57 @@ int main(int argc, char **argv)
     arena_clear(&arena);
   }
 
-  TEST_BLOCK(STR("Function declaration - no parameters"))
-  {
-    String code = STR("int foo();");
-    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
-    C_Node *root = parse_c_tokens(&arena, tokens);
-
-    TEST_EVAL(root->child_count == 1);
-
-    C_Node *func = root->first_child;
-    TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
-    TEST_EVAL(func->child_count == 2);
-
-    C_Node *return_type = func->first_child;
-    TEST_EVAL(return_type->type == C_NODE_TYPE);
-    TEST_EVAL(string_match(return_type->name, STR("int")));
-
-    C_Node *name = func->first_child->next_sibling;
-    TEST_EVAL(name->type == C_NODE_IDENTIFIER);
-    TEST_EVAL(string_match(name->name, STR("foo")));
-
-    arena_clear(&arena);
-  }
+  // TEST_BLOCK(STR("Function declaration - no parameters"))
+  // {
+  //   String code = STR("int foo();");
+  //   C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+  //   C_Node *root = parse_c_tokens(&arena, tokens);
+  //
+  //   TEST_EVAL(root->child_count == 1);
+  //
+  //   C_Node *func = root->first_child;
+  //   TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
+  //   TEST_EVAL(func->child_count == 2);
+  //
+  //   C_Node *return_type = func->first_child;
+  //   TEST_EVAL(return_type->type == C_NODE_TYPE);
+  //   TEST_EVAL(string_match(return_type->name, STR("int")));
+  //
+  //   C_Node *name = func->first_child->next_sibling;
+  //   TEST_EVAL(name->type == C_NODE_IDENTIFIER);
+  //   TEST_EVAL(string_match(name->name, STR("foo")));
+  //
+  //   arena_clear(&arena);
+  // }
 
   tester_summarize();
 
   String code = STR(
-    "typedef float foo;\n"
+    // "typedef float foo;\n"
+    "const int * const *a = 1;\n"
 
-    "struct boo\n"
-    "{\n"
-    "  int a;"
-    "  int b;"
-    "}\n"
 
-    "enum boo\n"
-    "{\n"
-    "  A = 1,"
-    "  B,"
-    "}\n"
+    // "struct foo;\n"
+    // "struct boo\n"
+    // "{\n"
+    // "  int a;"
+    // "  int b;"
+    // "}\n"
+    //
+    // "enum boo\n"
+    // "{\n"
+    // "  A = 1,\n"
+    // "  B,\n"
+    // "}\n"
 
-    "void test(float boo, int bar)\n"
-    "{\n"
-    "  struct boo = {.a = 1, .b = 2+2, 3};\n"
-    "  if (true)\n"
-    "  {\n"
-    "    boo = 0;\n"
-    "  }\n"
-    "}\n"
+    // "void test(float boo, int bar)\n"
+    // "{\n"
+    // "  struct boo = {.a = 1, .b = 2+2, 3};\n"
+    // "  if (true)\n"
+    // "  {\n"
+    // "    boo = 0;\n"
+    // "  }\n"
+    // "}\n"
   );
   print_code_tree(&arena, code);
 

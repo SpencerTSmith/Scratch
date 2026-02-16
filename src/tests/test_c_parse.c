@@ -669,9 +669,26 @@ int main(int argc, char **argv)
 
   String code = STR(
     "typedef float foo;\n"
+
+    "struct boo\n"
+    "{\n"
+    "  int a;"
+    "  int b;"
+    "}\n"
+
+    "enum boo\n"
+    "{\n"
+    "  A = 1,"
+    "  B,"
+    "}\n"
+
     "void test(float boo, int bar)\n"
     "{\n"
-    "  int boo = .a = 1, .b = 2+2, 3};"
+    "  struct boo = {.a = 1, .b = 2+2, 3};\n"
+    "  if (true)\n"
+    "  {\n"
+    "    boo = 0;\n"
+    "  }\n"
     "}\n"
   );
   print_code_tree(&arena, code);

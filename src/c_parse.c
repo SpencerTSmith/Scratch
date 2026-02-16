@@ -6,7 +6,6 @@
 #include "c_tokenize.h"
 
 // FIXME:
-// - Better error reporting, show line, etc. have all the info just need to stitch together.
 // - Will probably need to start having distinct types for statement links, once start actually using the AST
 //
 // TODO:
@@ -109,6 +108,13 @@ typedef enum C_Unary
 
   C_UNARY_COUNT,
 } C_Unary;
+
+typedef enum C_Node_Flags
+{
+  C_NODE_FLAG_CONST    = 1 << 0,
+  C_NODE_FLAG_VOLATILE = 1 << 1,
+  C_NODE_FLAG_ = 1 << 2,
+} C_Node_Flags;
 
 typedef struct C_Node C_Node;
 
@@ -386,26 +392,22 @@ String c_get_line(String source, usize wish_line)
     if (c == '\n')
     {
       current_line += 1;
-      continue;
-    }
 
-    if (current_line == wish_line)
-    {
-      if (!found_line)
+      if (found_line)
       {
-        substring_start = char_index;
         substring_close = char_index;
-        found_line = true;
+        break;
       }
       else
       {
-        substring_close += 1;
+        continue;
       }
     }
 
-    if (found_line && current_line != wish_line)
+    if (current_line == wish_line && !found_line)
     {
-      break;
+      substring_start = char_index;
+      found_line = true;
     }
   }
 
@@ -487,7 +489,7 @@ b32 c_parse_incomplete(C_Parser parser)
 
 // TODO: Type cache
 static
-C_Node *c_parse_type(Arena *arena, C_Parser *parser)
+C_Node *c_parse_type_specifiers(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_nil_node();
 
@@ -499,6 +501,14 @@ C_Node *c_parse_type(Arena *arena, C_Parser *parser)
     result->name = token.raw; // Hehehe, nice to just do this
 
     c_parse_eat(parser, token.type);
+  }
+  else if (token.type == C_TOKEN_KEYWORD_STRUCT)
+  {
+    result = c_parse_struct_declaration(arena, parser);
+  }
+  else if (token.type == C_TOKEN_KEYWORD_ENUM)
+  {
+    result = c_parse_struct_declaration(arena, parser);
   }
   else if (token.type == C_TOKEN_IDENTIFIER) // Custom type
   {
@@ -617,8 +627,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
         }
         else
         {
-          // FIXME: Once have var args messages, pass the name of identifier
-          c_parse_error(parser, "Expected assignment following designated initializer");
+          c_parse_error(parser, "Expected assignment following designated initializer for member '%.*s'.", STRF(initializer->name));
           break;
         }
       }
@@ -669,7 +678,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS);
 
     // Check if we can parse this as a type.
-    C_Node *type = c_parse_type(arena, parser);
+    C_Node *type = c_parse_type_specifiers(arena, parser);
 
     // It is a unary cast if we were able to parse a type..
     if (type != c_nil_node())
@@ -842,7 +851,7 @@ C_Node *c_parse_declarator(Arena *arena, C_Parser *parser, C_Node_Type type)
 {
   C_Node *result = c_new_node(arena, type);
 
-  C_Node *type_node = c_parse_type(arena, parser);
+  C_Node *type_node = c_parse_type_specifiers(arena, parser);
   c_node_add_child(result, type_node);
 
   C_Node *name_node = c_parse_identifier(arena, parser);
@@ -907,6 +916,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       {
         C_Node *condition = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
         c_node_add_child(result, condition);
+        result->links.condition = condition;
 
         if (c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
         {
@@ -930,8 +940,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
       }
       else
       {
-        // FIXME: var args for this function so can pass if or while string to this message
-        c_parse_error(parser, "Expected begin parenthesis following if or while.");
+        c_parse_error(parser, "Expected begin parenthesis following %s.", peek.type == C_TOKEN_KEYWORD_IF ? "if" : "while");
       }
 
       if (peek.type == C_TOKEN_KEYWORD_WHILE)
@@ -1114,7 +1123,6 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
 
       if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
       {
-        // FIXME: var args to report the right string
         c_parse_error(parser, "Expected semicolon following return.");
       }
     } break;
@@ -1190,8 +1198,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
         {
           if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
           {
-            // FIXME: var args to report the right string
-            c_parse_error(parser, "Expected semicolon following declaration");
+            c_parse_error(parser, "Expected semicolon following expression.");
           }
         }
       }
@@ -1276,104 +1283,72 @@ C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser)
 }
 
 static
-C_Node *c_parse_struct_declaration(Arena *arena, C_Parser *parser)
+C_Node *c_parse_enum_or_struct_declaration(Arena *arena, C_Parser *parser, C_Node_Type enum_or_struct)
 {
+  ASSERT(enum_or_struct == C_NODE_STRUCT_DECLARATION || enum_or_struct == C_NODE_ENUM_DECLARATION, "Idiot.");
+
+  b32 is_struct   = enum_or_struct == C_NODE_STRUCT_DECLARATION;
+  char *node_name = is_struct ? "struct" : "enum";
+
+  C_Token_Type expected_token = is_struct ? C_TOKEN_KEYWORD_STRUCT : C_TOKEN_KEYWORD_ENUM;
+
   C_Node *result = c_nil_node();
 
-  if (c_parse_eat(parser, C_TOKEN_KEYWORD_STRUCT))
+  if (c_parse_eat(parser, expected_token))
   {
-    result = c_new_node(arena, C_NODE_STRUCT_DECLARATION);
+    result = c_new_node(arena, enum_or_struct);
 
-    // Non-anonymous struct.
+    // Non-anonymous
     if (c_parse_match(parser, C_TOKEN_IDENTIFIER))
     {
       C_Node *name = c_parse_identifier(arena, parser);
       c_node_add_child(result, name);
     }
 
-    // Grab definition if there.
     if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
     {
       if (c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE))
       {
-        // Consume struct members
+        C_Token_Type separator = is_struct ? C_TOKEN_SEMICOLON : C_TOKEN_COMMA;
+
+        // Consume members
         while (!c_parse_eat(parser, C_TOKEN_CLOSE_CURLY_BRACE))
         {
-          C_Node *member = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
-          c_node_add_child(result, member);
-
-          if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+          if (is_struct)
           {
-            c_parse_error(parser, "Expected semicolon following struct member declaration.");
+            C_Node *member = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
+            c_node_add_child(result, member);
+          }
+          else
+          {
+            C_Node *member = c_parse_identifier(arena, parser);
+            c_node_add_child(result, member);
+
+            if (c_parse_eat(parser, C_TOKEN_ASSIGN))
+            {
+              // Don't want commas at this level to act like operators, so pass comma's precedence
+              C_Node *member_expression = c_parse_expression(arena, parser, token_to_node_table[C_TOKEN_COMMA].binary_precedence);
+              c_node_add_child(member, member_expression);
+            }
+          }
+
+          if (!c_parse_eat(parser, separator))
+          {
+            char *separator_name = is_struct ? "semicolon" : "comma";
+            c_parse_error(parser, "Expected %s following %s member declaration.", separator_name, node_name);
             break;
           }
         }
       }
       else
       {
-        c_parse_error(parser, "Expected begin curly brace following struct declaration.");
+        c_parse_error(parser, "Expected begin curly brace following %s declaration.", node_name);
       }
     }
   }
   else
   {
-    c_parse_error(parser, "Tried to parse struct declaration without beginning struct token.");
-  }
-
-  return result;
-}
-
-// TODO: Can factor this and struct parsing into same function probably, just a few things different.
-static
-C_Node *c_parse_enum_declaration(Arena *arena, C_Parser *parser)
-{
-  C_Node *result = c_nil_node();
-
-  if (c_parse_eat(parser, C_TOKEN_KEYWORD_ENUM))
-  {
-    result = c_new_node(arena, C_NODE_ENUM_DECLARATION);
-
-    // Non-anonymous enum.
-    if (c_parse_match(parser, C_TOKEN_IDENTIFIER))
-    {
-      C_Node *name = c_parse_identifier(arena, parser);
-      c_node_add_child(result, name);
-    }
-
-    // Grab definition if there.
-    if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
-    {
-      if (c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE))
-      {
-        // Consume enum members
-        while (!c_parse_eat(parser, C_TOKEN_CLOSE_CURLY_BRACE))
-        {
-          C_Node *member = c_parse_identifier(arena, parser);
-          c_node_add_child(result, member);
-
-          if (c_parse_eat(parser, C_TOKEN_ASSIGN))
-          {
-            // Don't want commas at this level to act like operators, so pass comma's precedence
-            C_Node *member_expression = c_parse_expression(arena, parser, token_to_node_table[C_TOKEN_COMMA].binary_precedence);
-            c_node_add_child(member, member_expression);
-          }
-
-          if (!c_parse_eat(parser, C_TOKEN_COMMA))
-          {
-            c_parse_error(parser, "Expected comma following enum member declaration.");
-            break;
-          }
-        }
-      }
-      else
-      {
-        c_parse_error(parser, "Expected begin curly brace following enum declaration.");
-      }
-    }
-  }
-  else
-  {
-    c_parse_error(parser, "Tried to parse enum declaration without beginning enum token.");
+    c_parse_error(parser, "Tried to parse %s declaration without beginning %s token.", node_name);
   }
 
   return result;
@@ -1386,8 +1361,55 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
 
   C_Token token = c_parse_peek_token(*parser, 0);
 
-  // TODO: Should also check for declaration if it is an identifier that is a type too
-  if (c_token_is_type_keyword(token))
+  // Label
+  if (token.type == C_TOKEN_IDENTIFIER &&
+           c_parse_peek_token(*parser, 1).type == C_TOKEN_COLON)
+  {
+    result = c_new_node(arena, C_NODE_LABEL);
+    C_Node *name = c_parse_identifier(arena, parser);
+    c_node_add_child(result, name);
+
+    c_parse_eat(parser, C_TOKEN_COLON);
+  }
+  else if (token.type == C_TOKEN_KEYWORD_STRUCT)
+  {
+    result = c_parse_enum_or_struct_declaration(arena, parser, C_NODE_STRUCT_DECLARATION);
+
+    // Check for semi-colon if not at top level
+    if (!at_top_level && !c_parse_eat(parser, C_TOKEN_SEMICOLON))
+    {
+      c_parse_error(parser, "Expected semicolon following non-top-level struct declaration");
+    }
+  }
+  else if (token.type == C_TOKEN_KEYWORD_ENUM)
+  {
+    result = c_parse_enum_or_struct_declaration(arena, parser, C_NODE_ENUM_DECLARATION);
+
+    if (!at_top_level && !c_parse_eat(parser, C_TOKEN_SEMICOLON))
+    {
+      c_parse_error(parser, "Expected semicolon following non-top-level enum declaration");
+    }
+  }
+  else if (token.type == C_TOKEN_KEYWORD_TYPEDEF)
+  {
+    c_parse_eat(parser, C_TOKEN_KEYWORD_TYPEDEF);
+
+    result = c_new_node(arena, C_NODE_TYPEDEF);
+
+    C_Node *type = c_parse_type_specifiers(arena, parser);
+    c_node_add_child(result, type);
+
+    C_Node *alias = c_parse_identifier(arena, parser);
+    c_node_add_child(result, alias);
+
+    if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+    {
+      c_parse_error(parser, "Expected semicolon following typedef statement.");
+    }
+  }
+
+  // Failed to parse as anything else, so probably a function or variable declaration
+  if (result == c_nil_node())
   {
     C_Token peek0 = c_parse_peek_token(*parser, 1);
 
@@ -1405,52 +1427,6 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
       {
         result = c_parse_variable_declaration(arena, parser);
       }
-    }
-  }
-  // Label
-  else if (token.type == C_TOKEN_IDENTIFIER &&
-           c_parse_peek_token(*parser, 1).type == C_TOKEN_COLON)
-  {
-    result = c_new_node(arena, C_NODE_LABEL);
-    C_Node *name = c_parse_identifier(arena, parser);
-    c_node_add_child(result, name);
-
-    c_parse_eat(parser, C_TOKEN_COLON);
-  }
-  else if (token.type == C_TOKEN_KEYWORD_STRUCT)
-  {
-    result = c_parse_struct_declaration(arena, parser);
-
-    // Check for semi-colon if not at top level
-    if (!at_top_level && !c_parse_eat(parser, C_TOKEN_SEMICOLON))
-    {
-      c_parse_error(parser, "Expected semicolon following non-top-level struct declaration");
-    }
-  }
-  else if (token.type == C_TOKEN_KEYWORD_ENUM)
-  {
-    result = c_parse_enum_declaration(arena, parser);
-
-    if (!at_top_level && !c_parse_eat(parser, C_TOKEN_SEMICOLON))
-    {
-      c_parse_error(parser, "Expected semicolon following non-top-level enum declaration");
-    }
-  }
-  else if (token.type == C_TOKEN_KEYWORD_TYPEDEF)
-  {
-    c_parse_eat(parser, C_TOKEN_KEYWORD_TYPEDEF);
-
-    result = c_new_node(arena, C_NODE_TYPEDEF);
-
-    C_Node *type = c_parse_type(arena, parser);
-    c_node_add_child(result, type);
-
-    C_Node *alias = c_parse_identifier(arena, parser);
-    c_node_add_child(result, alias);
-
-    if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
-    {
-      c_parse_error(parser, "Expected semicolon following typedef statement.");
     }
   }
 

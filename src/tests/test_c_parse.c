@@ -691,7 +691,7 @@ int main(int argc, char **argv)
 
   String code = STR(
     // "typedef float foo;\n"
-    "const int * const *a = 1;\n"
+    "const int * const *a[10][12] = 1;\n"
 
 
     // "struct foo;\n"

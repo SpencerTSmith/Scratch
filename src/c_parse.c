@@ -572,6 +572,40 @@ C_Node *c_parse_pointer_chain(Arena *arena, C_Parser *parser, C_Node *base_type)
 }
 
 static
+C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence);
+
+static
+C_Node *c_parse_after_identifer_types(Arena *arena, C_Parser *parser, C_Node *after_pointers_type)
+{
+  C_Node *result = after_pointers_type;
+
+  while (c_parse_eat(parser, C_TOKEN_BEGIN_SQUARE_BRACE))
+  {
+    C_Node *array = c_new_node(arena, C_NODE_TYPE_ARRAY);
+
+    // NOTE: No type checking for array count expression here.
+    C_Node *array_count = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+
+    c_node_add_child(array, result);
+
+    // NOTE: 2nd child will be array count
+    c_node_add_child(array, array_count);
+
+    result = array;
+
+    if (!c_parse_eat(parser, C_TOKEN_CLOSE_SQUARE_BRACE))
+    {
+      c_parse_error(parser, "Expected closing square brace in array type declaration.");
+      break;
+    }
+  }
+
+  printf("%zu\n", result->child_count);
+
+  return result;
+}
+
+static
 C_Node *c_parse_base_type(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_nil_node();
@@ -628,9 +662,6 @@ C_Node *c_parse_identifier(Arena *arena, C_Parser *parser)
 
   return result;
 }
-
-static
-C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence);
 
 static
 C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
@@ -1497,13 +1528,22 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
                     token.type == C_TOKEN_KEYWORD_STRUCT ? "struct" : "enum");
     }
   }
+
   // More complex stuff.
   else
   {
     C_Node *base_type = c_parse_base_type(arena, parser);
 
-    C_Node *after_pointers = c_parse_pointer_chain(arena, parser, base_type);
+    // We need to check if this is JUST a struct/enum declaration without declaring a variable with it.
+    if (base_type->type == C_NODE_STRUCT_DECLARATION || base_type->type == C_NODE_ENUM_DECLARATION)
+    {
+    }
+
+    C_Node *after_pointers_type = c_parse_pointer_chain(arena, parser, base_type);
+
     C_Node *identifier = c_parse_identifier(arena, parser);
+
+    C_Node *after_identifier_type = c_parse_after_identifer_types(arena, parser, after_pointers_type);
 
     // Function thing
     if (c_parse_match(parser, C_TOKEN_BEGIN_PARENTHESIS) && at_top_level)
@@ -1515,7 +1555,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
     else
     {
       result = c_new_node(arena, C_NODE_VARIABLE_DECLARATION);
-      c_node_add_child(result, after_pointers);
+      c_node_add_child(result, after_identifier_type);
       c_node_add_child(result, identifier);
 
       // If we see an equal sign, grab initializing expression

@@ -217,6 +217,7 @@ int main(int argc, char **argv)
 {
   Arena arena = arena_make();
 
+#if 1
   TEST_BLOCK(STR("Literals"))
   {
     C_Node *tree = parse_expression(&arena, STR("42"));
@@ -651,56 +652,58 @@ int main(int argc, char **argv)
     arena_clear(&arena);
   }
 
-  // TEST_BLOCK(STR("Function declaration - no parameters"))
-  // {
-  //   String code = STR("int foo();");
-  //   C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
-  //   C_Node *root = parse_c_tokens(&arena, tokens);
-  //
-  //   TEST_EVAL(root->child_count == 1);
-  //
-  //   C_Node *func = root->first_child;
-  //   TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
-  //   TEST_EVAL(func->child_count == 2);
-  //
-  //   C_Node *return_type = func->first_child;
-  //   TEST_EVAL(return_type->type == C_NODE_TYPE);
-  //   TEST_EVAL(string_match(return_type->name, STR("int")));
-  //
-  //   C_Node *name = func->first_child->next_sibling;
-  //   TEST_EVAL(name->type == C_NODE_IDENTIFIER);
-  //   TEST_EVAL(string_match(name->name, STR("foo")));
-  //
-  //   arena_clear(&arena);
-  // }
+  TEST_BLOCK(STR("Function declaration - no parameters"))
+  {
+    String code = STR("int foo();");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+
+    TEST_EVAL(root->child_count == 1);
+
+    C_Node *func = root->first_child;
+    TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
+    TEST_EVAL(func->child_count == 2);
+
+    C_Node *return_type = func->first_child;
+    TEST_EVAL(return_type->type == C_NODE_TYPE);
+    TEST_EVAL(string_match(return_type->name, STR("int")));
+
+    C_Node *name = func->first_child->next_sibling;
+    TEST_EVAL(name->type == C_NODE_IDENTIFIER);
+    TEST_EVAL(string_match(name->name, STR("foo")));
+
+    arena_clear(&arena);
+  }
+
+#endif
 
   tester_summarize();
 
   String code = STR(
     // "typedef float foo;\n"
-    "const int * const *a[10][12] = 1;\n"
-
-    "struct foo;\n"
-    "struct boo\n"
-    "{\n"
-    "  int a;"
-    "  int b;"
-    "}\n"
+    // "const int * const *a[10][12] = 1;\n"
     //
-    "enum boo\n"
-    "{\n"
-    "  A = 1,\n"
-    "  B,\n"
-    "}\n"
-
-    // "void test(float boo, int bar)\n"
+    // "struct foo;\n"
+    // "struct boo\n"
     // "{\n"
-    // "  struct boo = {.a = 1, .b = 2+2, 3};\n"
-    // "  if (true)\n"
-    // "  {\n"
-    // "    boo = 0;\n"
-    // "  }\n"
+    // "  int a;"
+    // "  int b;"
+    // "} goo;\n"
+    // //
+    // "enum boo\n"
+    // "{\n"
+    // "  A = 1,\n"
+    // "  B,\n"
     // "}\n"
+
+    "void test(float boo, int bar)\n"
+    "{\n"
+    "  struct boo bo = {.a = 1, .b = 2+2, 3};\n"
+    "  if (true)\n"
+    "  {\n"
+    "    boo = 0;\n"
+    "  }\n"
+    "}\n"
   );
   print_code_tree(&arena, code);
 

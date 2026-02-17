@@ -116,6 +116,7 @@ typedef enum C_Unary
   C_UNARY_BITWISE_NOT,
   C_UNARY_LOGICAL_NOT,
   C_UNARY_CAST,
+  C_UNARY_SIZEOF,
 
   C_UNARY_COUNT,
 } C_Unary;
@@ -854,6 +855,31 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
       {
         c_parse_error(parser, "Expected close parenthesis following expression.");
       }
+    }
+  }
+  else if (token.type == C_TOKEN_KEYWORD_SIZEOF)
+  {
+    c_parse_eat(parser, C_TOKEN_KEYWORD_SIZEOF);
+
+    if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
+    {
+      result = c_new_node(arena, C_NODE_UNARY);
+      result->unary = C_UNARY_SIZEOF;
+
+      // Try to get an abstract declarator
+      C_Node *child = c_parse_full_declarator(arena, parser, 0, true);
+
+      // We couldn't get an abstract declarator, has to be expression.
+      if (child == c_nil_node())
+      {
+        child = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+      }
+
+      c_node_add_child(result, child);
+    }
+    else
+    {
+      c_parse_error(parser, "Expected ( following sizeof.");
     }
   }
 

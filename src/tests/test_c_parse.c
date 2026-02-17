@@ -140,6 +140,7 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
           case C_UNARY_BITWISE_NOT:    { printf("~"); }  break;
           case C_UNARY_LOGICAL_NOT:    { printf("!"); } break;
           case C_UNARY_CAST:           { printf("CAST"); } break;
+          case C_UNARY_SIZEOF:         { printf("sizeof"); } break;
         }
       }
       break;
@@ -1211,30 +1212,31 @@ int main(int argc, char **argv)
   tester_summarize();
 
   String code = STR(
-    "typedef float foo;\n"
-    "const int * const *a[10][12] = 1;\n"
-
-    "struct foo;\n"
-    "struct boo\n"
-    "{\n"
-    "  int a;"
-    "  int b;"
-    "} goo;\n"
+      "int i = sizeof(a[0]);"
+    // "typedef float foo;\n"
+    // "const int * const *a[10][12] = 1;\n"
     //
-    "enum boo\n"
-    "{\n"
-    "  A = 1,\n"
-    "  B,\n"
-    "}\n"
-
-    "void test(float boo, int bar)\n"
-    "{\n"
-    "  struct boo bo = {.a = 1, .b = 2+2, 3};\n"
-    "  if (true)\n"
-    "  {\n"
-    "    boo = 0;\n"
-    "  }\n"
-    "}\n"
+    // "struct foo;\n"
+    // "struct boo\n"
+    // "{\n"
+    // "  int a;"
+    // "  int b;"
+    // "} goo;\n"
+    // //
+    // "enum boo\n"
+    // "{\n"
+    // "  A = 1,\n"
+    // "  B,\n"
+    // "}\n"
+    //
+    // "void test(float boo, int bar)\n"
+    // "{\n"
+    // "  struct boo bo = {.a = 1, .b = 2+2, 3};\n"
+    // "  if (true)\n"
+    // "  {\n"
+    // "    boo = 0;\n"
+    // "  }\n"
+    // "}\n"
   );
   print_code_tree(&arena, code);
 

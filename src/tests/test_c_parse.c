@@ -33,7 +33,14 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
 
     switch (node->type)
     {
-      default: { printf("%s", C_Node_Type_strings[node->type]); } break;
+      default:
+      {
+        printf("%s", C_Node_Type_strings[node->type]);
+        if (node->name.v)
+        {
+          printf(" -- %.*s", STRF(node->name));
+        }
+      } break;
 
       case C_NODE_LITERAL:
       {
@@ -141,31 +148,11 @@ void print_c_ast(C_Node *node, isize prev_depth, isize depth)
         printf("?:");
       }
       break;
-      case C_NODE_IDENTIFIER:
-      case C_NODE_TYPE:
-      {
-        printf("%.*s", STRF(node->name));
-      }
-      break;
-      case C_NODE_FUNCTION_CALL:
-      {
-        printf("CALL - %.*s", STRF(node->name));
-      }
-      break;
-      case C_NODE_STRUCT_DECLARATION:
-      {
-        printf("struct %.*s", STRF(node->name));
-      }
-      break;
-      case C_NODE_ENUM_DECLARATION:
-      {
-        printf("enum %.*s", STRF(node->name));
-      }
-      break;
     }
 
     if (node->declaration_flags)
     {
+      printf(" flags:");
       // TODO: Keep this updated
       if (node->declaration_flags & C_DECLARATION_FLAG_CONST)    { printf(" const"); }
       if (node->declaration_flags & C_DECLARATION_FLAG_STATIC)   { printf(" static"); }
@@ -693,19 +680,18 @@ int main(int argc, char **argv)
     // "typedef float foo;\n"
     "const int * const *a[10][12] = 1;\n"
 
-
-    // "struct foo;\n"
-    // "struct boo\n"
-    // "{\n"
-    // "  int a;"
-    // "  int b;"
-    // "}\n"
+    "struct foo;\n"
+    "struct boo\n"
+    "{\n"
+    "  int a;"
+    "  int b;"
+    "}\n"
     //
-    // "enum boo\n"
-    // "{\n"
-    // "  A = 1,\n"
-    // "  B,\n"
-    // "}\n"
+    "enum boo\n"
+    "{\n"
+    "  A = 1,\n"
+    "  B,\n"
+    "}\n"
 
     // "void test(float boo, int bar)\n"
     // "{\n"

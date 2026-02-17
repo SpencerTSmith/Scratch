@@ -11,7 +11,11 @@
 // TODO:
 // - Functionality:
 //   - Type parsing
-//     - Caching these
+//     - Function pointers
+//     - Parentheses in general, don't think it needs a precedence level parser like for expressions
+//         since only 2 tokens -- * and ( -- possible, so loop while * and recurse on (
+//     - Comma separated identifiers for same declarator i.e. int i, j;
+//     - Caching these for typechecking/referencing in symbol table
 //   - Symbol Table(s)
 
 #define C_Node_Type(X)           \
@@ -575,20 +579,19 @@ static
 C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence);
 
 static
-C_Node *c_parse_after_identifer_types(Arena *arena, C_Parser *parser, C_Node *after_pointers_type)
+C_Node *c_parse_postfix_declarators(Arena *arena, C_Parser *parser, C_Node *after_pointers_type)
 {
   C_Node *result = after_pointers_type;
 
   while (c_parse_eat(parser, C_TOKEN_BEGIN_SQUARE_BRACE))
   {
     C_Node *array = c_new_node(arena, C_NODE_TYPE_ARRAY);
-
-    // NOTE: No type checking for array count expression here.
-    C_Node *array_count = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
-
     c_node_add_child(array, result);
 
     // NOTE: 2nd child will be array count
+
+    // NOTE: No type checking for array count expression here.
+    C_Node *array_count = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(array, array_count);
 
     result = array;
@@ -635,8 +638,11 @@ C_Node *c_parse_base_type(Arena *arena, C_Parser *parser)
     c_parse_error(parser, "Invalid token to begin parsing base type");
   }
 
-  // Post-type flags immediately after still apply to the base type
-  flags |= c_parse_declaration_flag_chain(parser);
+  // Post fix flags immediately after still apply to the base type
+  if (result != c_nil_node())
+  {
+    result->declaration_flags |= c_parse_declaration_flag_chain(parser);
+  }
 
   return result;
 }
@@ -654,10 +660,6 @@ C_Node *c_parse_identifier(Arena *arena, C_Parser *parser)
     result->name = token.raw;
 
     c_parse_eat(parser, C_TOKEN_IDENTIFIER);
-  }
-  else
-  {
-    c_parse_error(parser, "Tried to parse non-identifier token as variable.");
   }
 
   return result;
@@ -967,16 +969,39 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 }
 
 // Can be used for parsing function parameters, the beginning of variable declarations, struct members...
+// Will also return the subsequent identifier in out_identifier,
+// As a nice side effect parsing base type will work for parsing struct/enum declarations and subsequent pointer/postfix/identifier checks will do nothing
+// (of course if we get valid syntax, you could potentially have a const struct declaration, invalid postfix on struct declaration with no identifier)
 static
-C_Node *c_parse_declarator(Arena *arena, C_Parser *parser, C_Node_Type type)
+C_Node *c_parse_full_declarator(Arena *arena, C_Parser *parser, C_Node **out_identifier)
 {
-  C_Node *result = c_new_node(arena, type);
+  C_Node *base_type = c_parse_base_type(arena, parser);
 
-  C_Node *type_node = c_parse_base_type(arena, parser);
-  c_node_add_child(result, type_node);
+  C_Node *after_pointers = c_parse_pointer_chain(arena, parser, base_type);
 
-  C_Node *name_node = c_parse_identifier(arena, parser);
-  c_node_add_child(result, name_node);
+  C_Node *identifier = c_parse_identifier(arena, parser);
+  *out_identifier = identifier;
+
+  C_Node *after_postfix = c_parse_postfix_declarators(arena, parser, after_pointers);
+
+  return after_postfix;
+}
+
+static
+C_Node *c_parse_variable_init(Arena *arena, C_Parser *parser)
+{
+  C_Node *result = c_nil_node();
+
+  // If we see an equal sign, grab initializing expression
+  if (c_parse_eat(parser, C_TOKEN_ASSIGN))
+  {
+    result = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+
+    if (result == c_nil_node())
+    {
+      c_parse_error(parser, "Expected expression to initialize variable declaration.");
+    }
+  }
 
   return result;
 }
@@ -984,24 +1009,24 @@ C_Node *c_parse_declarator(Arena *arena, C_Parser *parser, C_Node_Type type)
 static
 C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
 {
-  // TODO: Comma separations for multiple variable decls
-  C_Node *result = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
+  C_Node *result = c_nil_node();
 
-  // If we see an equal sign, grab initializing expression
-  if (c_parse_eat(parser, C_TOKEN_ASSIGN))
+  C_Node *identifier = c_nil_node();
+  C_Node *declarator = c_parse_full_declarator(arena, parser, &identifier);
+
+  if (declarator != c_nil_node() && identifier != c_nil_node())
   {
-    C_Node *expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
-    c_node_add_child(result, expression);
+    result = c_new_node(arena, C_NODE_VARIABLE_DECLARATION);
+    c_node_add_child(result, declarator);
+    c_node_add_child(result, identifier);
 
-    if (expression->type == C_NODE_NONE)
+    C_Node *init = c_parse_variable_init(arena, parser);
+    c_node_add_child(result, init);
+
+    if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
     {
-      c_parse_error(parser, "Expected expression to initialize variable declaration.");
+      c_parse_error(parser, "Expected semicolon following variable declaration.");
     }
-  }
-
-  if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
-  {
-    c_parse_error(parser, "Expected semicolon following variable declaration.");
   }
 
   return result;
@@ -1009,49 +1034,6 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
 
 static
 C_Node *c_parse_block(Arena *arena, C_Parser *parser);
-
-static
-C_Node *c_parse_function_declaration(Arena *arena, C_Parser *parser)
-{
-  C_Node *result = c_parse_declarator(arena, parser, C_NODE_FUNCTION_DECLARATION);
-
-  if (!c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
-  {
-    c_parse_error(parser, "Expected open parenthesis for function declaration");
-  }
-
-  // 3rd child until last are parameters, don't go into this loop if we immediately see a close parenthesis
-  if (!c_parse_match(parser, C_TOKEN_CLOSE_PARENTHESIS))
-  {
-    // Haha, do while
-    do
-    {
-      C_Node *parameter = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
-      c_node_add_child(result, parameter);
-    }
-    while (c_parse_eat(parser, C_TOKEN_COMMA));
-  }
-
-  if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
-  {
-    c_parse_error(parser, "Expected close parenthesis for function declaration");
-  }
-
-  // Parse definition block.
-  if (c_parse_match(parser, C_TOKEN_BEGIN_CURLY_BRACE))
-  {
-    C_Node *definition = c_parse_block(arena, parser);
-    c_node_add_child(result, definition);
-  }
-  // Or a semicolon
-  else if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
-  {
-    c_parse_error(parser, "Expected semicolon or function definition block.");
-  }
-
-  return result;
-}
-
 
 static
 C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level);
@@ -1427,7 +1409,6 @@ C_Node *c_parse_enum_or_struct_declaration(Arena *arena, C_Parser *parser, C_Tok
       c_parse_eat(parser, C_TOKEN_IDENTIFIER);
     }
 
-    // FIXME: Grab definition always?
     if (c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE))
     {
       C_Token_Type separator = is_struct ? C_TOKEN_SEMICOLON : C_TOKEN_COMMA;
@@ -1437,8 +1418,12 @@ C_Node *c_parse_enum_or_struct_declaration(Arena *arena, C_Parser *parser, C_Tok
       {
         if (is_struct)
         {
-          C_Node *member = c_parse_declarator(arena, parser, C_NODE_VARIABLE_DECLARATION);
-          c_node_add_child(result, member);
+          // TODO: Error checking and reporting here
+          C_Node *member_identifier = c_nil_node();
+          C_Node *member_declarator = c_parse_full_declarator(arena, parser, &member_identifier);
+
+          c_node_add_child(result, member_declarator);
+          c_node_add_child(result, member_identifier);
         }
         else
         {
@@ -1494,6 +1479,8 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
   }
   else if (token.type == C_TOKEN_KEYWORD_TYPEDEF)
   {
+    // FIXME: Apparently this is not actually how it works.... its parsed as a declaration, and the identifier in the declaration
+    // becomes the alias....
     c_parse_eat(parser, C_TOKEN_KEYWORD_TYPEDEF);
 
     result = c_new_node(arena, C_NODE_TYPEDEF);
@@ -1509,70 +1496,101 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
       c_parse_error(parser, "Expected semicolon following typedef statement.");
     }
   }
-  else if (token.type == C_TOKEN_KEYWORD_STRUCT || token.type == C_TOKEN_KEYWORD_ENUM)
-  {
-    result = c_parse_enum_or_struct_declaration(arena, parser, token.type);
-
-    if (c_parse_match(parser, C_TOKEN_IDENTIFIER) || c_parse_match(parser, C_TOKEN_STAR))
-    {
-      // TODO: This is actually part of a variable/function declaration
-
-    }
-
-    // Check for semicolon if not at top level or if we didn't have a body (no member children).
-    b32 check_semicolon = !at_top_level || result->child_count == 0;
-
-    if (!c_parse_eat(parser, C_TOKEN_SEMICOLON) && check_semicolon)
-    {
-      c_parse_error(parser, "Expected semicolon following non-top-level %s declaration",
-                    token.type == C_TOKEN_KEYWORD_STRUCT ? "struct" : "enum");
-    }
-  }
-
-  // More complex stuff.
+  // More complex stuff. Valid options include a variable, function, or struct/enum declaration.
   else
   {
-    C_Node *base_type = c_parse_base_type(arena, parser);
+    C_Node *maybe_identifier = c_nil_node();
+    C_Node *maybe_declarator = c_parse_full_declarator(arena, parser, &maybe_identifier);
 
-    // We need to check if this is JUST a struct/enum declaration without declaring a variable with it.
-    if (base_type->type == C_NODE_STRUCT_DECLARATION || base_type->type == C_NODE_ENUM_DECLARATION)
+    // NOTE: We need to check if this is JUST a struct/enum declaration without declaring a variable with it.
+    // that is, no identifier
+    b32 is_only_struct_or_enum = (maybe_declarator->type == C_NODE_STRUCT_DECLARATION || maybe_declarator->type == C_NODE_ENUM_DECLARATION) &&
+                                 (maybe_identifier == c_nil_node());
+
+    if (is_only_struct_or_enum)
     {
+      // TODO: Would be a good spot to print errors about having uncesseary declarator nonsense here,
+      // ie if after_postfix != base_type
+      result = maybe_declarator;
+
+      // Check for semicolon if not at top level or if we didn't have a body (no member children).
+      b32 check_semicolon = !at_top_level || result->child_count == 0;
+
+      if (!c_parse_eat(parser, C_TOKEN_SEMICOLON) && check_semicolon)
+      {
+        c_parse_error(parser, "Expected semicolon following non-top-level %s declaration",
+                      token.type == C_TOKEN_KEYWORD_STRUCT ? "struct" : "enum");
+      }
     }
-
-    C_Node *after_pointers_type = c_parse_pointer_chain(arena, parser, base_type);
-
-    C_Node *identifier = c_parse_identifier(arena, parser);
-
-    C_Node *after_identifier_type = c_parse_after_identifer_types(arena, parser, after_pointers_type);
-
-    // Function thing
-    if (c_parse_match(parser, C_TOKEN_BEGIN_PARENTHESIS) && at_top_level)
-    {
-      // FIXME: No longer works.
-      result = c_parse_function_declaration(arena, parser);
-    }
-    // Variable thing
+    // Else is a variable / function declaration
     else
     {
-      result = c_new_node(arena, C_NODE_VARIABLE_DECLARATION);
-      c_node_add_child(result, after_identifier_type);
-      c_node_add_child(result, identifier);
 
-      // If we see an equal sign, grab initializing expression
-      if (c_parse_eat(parser, C_TOKEN_ASSIGN))
+      // Function thing
+      if (c_parse_match(parser, C_TOKEN_BEGIN_PARENTHESIS))
       {
-        C_Node *expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
-        c_node_add_child(result, expression);
-
-        if (expression->type == C_NODE_NONE)
+        if (at_top_level)
         {
-          c_parse_error(parser, "Expected expression to initialize variable declaration.");
+          c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS);
+
+          // 3rd child until last are parameters, don't go into this loop if we immediately see a close parenthesis
+          if (!c_parse_match(parser, C_TOKEN_CLOSE_PARENTHESIS))
+          {
+            // Haha, do while
+            do
+            {
+              C_Node *parameter = c_parse_variable_declaration(arena, parser);
+              c_node_add_child(result, parameter);
+            }
+            while (c_parse_eat(parser, C_TOKEN_COMMA));
+          }
+
+          if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
+          {
+            c_parse_error(parser, "Expected close parenthesis for function declaration");
+          }
+
+          // Parse definition block.
+          if (c_parse_match(parser, C_TOKEN_BEGIN_CURLY_BRACE))
+          {
+            C_Node *definition = c_parse_block(arena, parser);
+            c_node_add_child(result, definition);
+          }
+          // Or a semicolon
+          else if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+          {
+            c_parse_error(parser, "Expected semicolon or function definition block.");
+          }
+        }
+        else
+        {
+          c_parse_error(parser, "Function declaration not at top level.");
         }
       }
 
-      if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+      // Variable thing
+      else
       {
-        c_parse_error(parser, "Expected semicolon following variable declaration.");
+        result = c_new_node(arena, C_NODE_VARIABLE_DECLARATION);
+        c_node_add_child(result, maybe_declarator);
+        c_node_add_child(result, maybe_identifier);
+
+        // If we see an equal sign, grab initializing expression
+        if (c_parse_eat(parser, C_TOKEN_ASSIGN))
+        {
+          C_Node *expression = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+          c_node_add_child(result, expression);
+
+          if (expression->type == C_NODE_NONE)
+          {
+            c_parse_error(parser, "Expected expression to initialize variable declaration.");
+          }
+        }
+
+        if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
+        {
+          c_parse_error(parser, "Expected semicolon following variable declaration.");
+        }
       }
     }
   }

@@ -217,6 +217,8 @@ int main(int argc, char **argv)
 {
   Arena arena = arena_make();
 
+  // NOTE: AI-generated most of these tests, had to fix many of them but was good for this at least.
+
 #if 1
   TEST_BLOCK(STR("Literals"))
   {
@@ -675,26 +677,555 @@ int main(int argc, char **argv)
     arena_clear(&arena);
   }
 
+  TEST_BLOCK(STR("Pointer declaration"))
+  {
+    String code = STR("int *p;");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_VARIABLE_DECLARATION);
+    C_Node *type = decl->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE_POINTER);
+    TEST_EVAL(type->first_child->type == C_NODE_TYPE);
+    TEST_EVAL(string_match(type->first_child->name, STR("int")));
+    C_Node *name = decl->first_child->next_sibling;
+    TEST_EVAL(string_match(name->name, STR("p")));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Double pointer declaration"))
+  {
+    String code = STR("int **pp;");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    C_Node *outer_ptr = decl->first_child;
+    TEST_EVAL(outer_ptr->type == C_NODE_TYPE_POINTER);
+    C_Node *inner_ptr = outer_ptr->first_child;
+    TEST_EVAL(inner_ptr->type == C_NODE_TYPE_POINTER);
+    TEST_EVAL(inner_ptr->first_child->type == C_NODE_TYPE);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Const pointer to int"))
+  {
+    String code = STR("int * const p;");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    C_Node *ptr = decl->first_child;
+    TEST_EVAL(ptr->type == C_NODE_TYPE_POINTER);
+    TEST_EVAL(ptr->declaration_flags & C_DECLARATION_FLAG_CONST);
+    TEST_EVAL(!(ptr->first_child->declaration_flags & C_DECLARATION_FLAG_CONST));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Pointer to const int"))
+  {
+    String code = STR("const int *p;");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    C_Node *ptr = decl->first_child;
+    TEST_EVAL(ptr->type == C_NODE_TYPE_POINTER);
+    TEST_EVAL(!(ptr->declaration_flags & C_DECLARATION_FLAG_CONST));
+    TEST_EVAL(ptr->first_child->declaration_flags & C_DECLARATION_FLAG_CONST);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Const pointer to const int"))
+  {
+    String code = STR("const int * const p;");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    C_Node *ptr = decl->first_child;
+    TEST_EVAL(ptr->type == C_NODE_TYPE_POINTER);
+    TEST_EVAL(ptr->declaration_flags & C_DECLARATION_FLAG_CONST);
+    TEST_EVAL(ptr->first_child->declaration_flags & C_DECLARATION_FLAG_CONST);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Array declaration"))
+  {
+    String code = STR("int arr[10];");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_VARIABLE_DECLARATION);
+    C_Node *type = decl->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE_ARRAY);
+    C_Node *base = type->first_child;
+    TEST_EVAL(base->type == C_NODE_TYPE);
+    TEST_EVAL(string_match(base->name, STR("int")));
+    C_Node *count = type->first_child->next_sibling;
+    TEST_EVAL(is_literal_int(count, 10));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Array of pointers"))
+  {
+    String code = STR("int *arr[10];");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    // Top of type tree should be array
+    C_Node *type = decl->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE_ARRAY);
+    // Underneath array should be pointer
+    TEST_EVAL(type->first_child->type == C_NODE_TYPE_POINTER);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("2D array"))
+  {
+    String code = STR("int arr[10][20];");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    C_Node *outer = decl->first_child;
+    TEST_EVAL(outer->type == C_NODE_TYPE_ARRAY);
+    C_Node *outer_count = outer->first_child->next_sibling;
+    TEST_EVAL(is_literal_int(outer_count, 20));
+    C_Node *inner = outer->first_child;
+    TEST_EVAL(inner->type == C_NODE_TYPE_ARRAY);
+    C_Node *inner_count = inner->first_child->next_sibling;
+    TEST_EVAL(is_literal_int(inner_count, 10));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Struct declaration - forward declaration"))
+  {
+    String code = STR("struct Foo;");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_STRUCT_DECLARATION);
+    TEST_EVAL(string_match(decl->name, STR("Foo")));
+    TEST_EVAL(decl->child_count == 0);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Struct declaration - with body"))
+  {
+    String code = STR("struct Foo { int x; float y; };");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_STRUCT_DECLARATION);
+    TEST_EVAL(string_match(decl->name, STR("Foo")));
+    TEST_EVAL(decl->child_count == 2);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Struct declaration - anonymous"))
+  {
+    String code = STR("struct { int x; };");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_STRUCT_DECLARATION);
+    TEST_EVAL(decl->name.count == 0);
+    arena_clear(&arena);
+  }
+
+  // ENUM DECLARATIONS
+  TEST_BLOCK(STR("Enum declaration"))
+  {
+    String code = STR("enum Color { RED, GREEN, BLUE, };");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_ENUM_DECLARATION);
+    TEST_EVAL(string_match(decl->name, STR("Color")));
+    TEST_EVAL(decl->child_count == 3);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Enum declaration - with values"))
+  {
+    String code = STR("enum Foo { A = 1, B = 2, };");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_ENUM_DECLARATION);
+    C_Node *a = decl->first_child;
+    TEST_EVAL(string_match(a->name, STR("A")));
+    TEST_EVAL(is_literal_int(a->first_child, 1));
+    C_Node *b = a->next_sibling;
+    TEST_EVAL(string_match(b->name, STR("B")));
+    TEST_EVAL(is_literal_int(b->first_child, 2));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Function declaration - with parameters"))
+  {
+    String code = STR("int add(int a, int b);");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *func = root->first_child;
+    TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
+    // return type + name + 2 params = 4
+    TEST_EVAL(func->child_count == 4);
+    C_Node *param1 = func->first_child->next_sibling->next_sibling;
+    TEST_EVAL(param1->type == C_NODE_VARIABLE_DECLARATION);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Function declaration - pointer return type"))
+  {
+    String code = STR("int *alloc(int size);");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *func = root->first_child;
+    TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
+    C_Node *return_type = func->first_child;
+    TEST_EVAL(return_type->type == C_NODE_TYPE_POINTER);
+    TEST_EVAL(return_type->first_child->type == C_NODE_TYPE);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Function definition"))
+  {
+    String code = STR("int add(int a, int b) { return a + b; }");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *func = root->first_child;
+    TEST_EVAL(func->type == C_NODE_FUNCTION_DECLARATION);
+    C_Node *body = func->last_child;
+    TEST_EVAL(body->type == C_NODE_BLOCK);
+    C_Node *ret = body->first_child;
+    TEST_EVAL(ret->type == C_NODE_RETURN);
+    TEST_EVAL(is_binary(ret->first_child, C_BINARY_ADD));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("If statement"))
+  {
+    String code = STR("void f() { if (x) { y = 1; } }");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *iff = body->first_child;
+    TEST_EVAL(iff->type == C_NODE_IF);
+    TEST_EVAL(is_identifier(iff->links.condition, STR("x")));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("If-else statement"))
+  {
+    String code = STR("void f() { if (x) { a = 1; } else { b = 2; } }");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *iff = body->first_child;
+    TEST_EVAL(iff->type == C_NODE_IF);
+    TEST_EVAL(iff->child_count == 3); // condition block + else
+    C_Node *els = iff->last_child;
+    TEST_EVAL(els->type == C_NODE_ELSE);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("While loop"))
+  {
+    String code = STR("void f() { while (i < 10) { i++; } }");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *loop = body->first_child;
+    TEST_EVAL(loop->type == C_NODE_WHILE);
+    TEST_EVAL(is_binary(loop->links.condition, C_BINARY_LESS_THAN));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("For loop"))
+  {
+    String code = STR("void f() { for (int i = 0; i < 10; i++) { } }");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *loop = body->first_child;
+    TEST_EVAL(loop->type == C_NODE_FOR);
+    TEST_EVAL(loop->links.init->type == C_NODE_VARIABLE_DECLARATION);
+    TEST_EVAL(is_binary(loop->links.condition, C_BINARY_LESS_THAN));
+    TEST_EVAL(is_unary(loop->links.update, C_UNARY_POST_INCREMENT));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Do-while loop"))
+  {
+    String code = STR("void f() { do { x++; } while (x < 10); }");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *loop = body->first_child;
+    TEST_EVAL(loop->type == C_NODE_DO_WHILE);
+    TEST_EVAL(is_binary(loop->links.condition, C_BINARY_LESS_THAN));
+    arena_clear(&arena);
+  }
+
+  // TEST_BLOCK(STR("Break and continue"))
+  // {
+  //   String code = STR("void f() { while (1) { if (x) break; else continue; } }");
+  //   C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+  //   C_Node *root = parse_c_tokens(&arena, tokens);
+  //   TEST_EVAL(!root->parent->had_error); // no parse errors
+  //   arena_clear(&arena);
+  // }
+
+  TEST_BLOCK(STR("Switch statement"))
+  {
+    String code = STR("void f() { switch (x) { case 1: break; case 2: break; } }");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *sw = body->first_child;
+    TEST_EVAL(sw->type == C_NODE_SWITCH);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Switch - basic with cases"))
+  {
+    String code = STR(
+      "void f() {"
+      "  switch (x) {"
+      "    case 1: y = 1; break;"
+      "    case 2: y = 2; break;"
+      "  }"
+      "}"
+    );
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *sw = body->first_child;
+    TEST_EVAL(sw->type == C_NODE_SWITCH);
+    // First child is condition
+    TEST_EVAL(is_identifier(sw->first_child, STR("x")));
+    // Second child is the block containing cases
+    C_Node *block = sw->first_child->next_sibling;
+    TEST_EVAL(block->type == C_NODE_BLOCK);
+    C_Node *case1 = block->first_child;
+    TEST_EVAL(case1->type == C_NODE_CASE);
+    TEST_EVAL(is_literal_int(case1->first_child, 1));
+    C_Node *case2 = case1->next_sibling;
+    TEST_EVAL(case2->type == C_NODE_CASE);
+    TEST_EVAL(is_literal_int(case2->first_child, 2));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Switch - with default"))
+  {
+    String code = STR(
+      "void f() {"
+      "  switch (x) {"
+      "    case 1: y = 1; break;"
+      "    default: y = 0; break;"
+      "  }"
+      "}"
+    );
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *sw = body->first_child;
+    TEST_EVAL(sw->type == C_NODE_SWITCH);
+    C_Node *block = sw->first_child->next_sibling;
+    C_Node *case1 = block->first_child;
+    TEST_EVAL(case1->type == C_NODE_CASE);
+    C_Node *def = case1->next_sibling;
+    TEST_EVAL(def->type == C_NODE_DEFAULT);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Switch - fallthrough"))
+  {
+    String code = STR(
+      "void f() {"
+      "  switch (x) {"
+      "    case 1:"
+      "    case 2: y = 2; break;"
+      "    case 3: y = 3; break;"
+      "  }"
+      "}"
+    );
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *sw = body->first_child;
+    TEST_EVAL(sw->type == C_NODE_SWITCH);
+    C_Node *block = sw->first_child->next_sibling;
+    C_Node *case1 = block->first_child;
+    TEST_EVAL(case1->type == C_NODE_CASE);
+    // Case 1 has no statements (fallthrough), only the match expression
+    TEST_EVAL(case1->child_count == 1);
+    C_Node *case2 = case1->next_sibling;
+    TEST_EVAL(case2->type == C_NODE_CASE);
+    TEST_EVAL(is_literal_int(case2->first_child, 2));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Switch - integer expression condition"))
+  {
+    String code = STR(
+      "void f() {"
+      "  switch (a + b) {"
+      "    case 1: break;"
+      "  }"
+      "}"
+    );
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *sw = body->first_child;
+    TEST_EVAL(sw->type == C_NODE_SWITCH);
+    TEST_EVAL(is_binary(sw->first_child, C_BINARY_ADD));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Goto and label"))
+  {
+    String code = STR("void f() { goto end; end: return; }");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *body = root->first_child->last_child;
+    C_Node *gt = body->first_child;
+    TEST_EVAL(gt->type == C_NODE_GOTO);
+    TEST_EVAL(string_match(gt->first_child->name, STR("end")));
+    C_Node *label = gt->next_sibling;
+    TEST_EVAL(label->type == C_NODE_LABEL);
+    arena_clear(&arena);
+  }
+
+  // COMPOUND LITERALS / INITIALIZERS
+  TEST_BLOCK(STR("Compound literal - positional"))
+  {
+    C_Node *tree = parse_expression(&arena, STR("{1, 2, 3}"));
+    TEST_EVAL(tree->type == C_NODE_COMPOUND_LITERAL);
+    TEST_EVAL(tree->child_count == 3);
+    TEST_EVAL(is_literal_int(tree->first_child, 1));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Compound literal - designated"))
+  {
+    C_Node *tree = parse_expression(&arena, STR("{.x = 1, .y = 2}"));
+    TEST_EVAL(tree->type == C_NODE_COMPOUND_LITERAL);
+    TEST_EVAL(tree->child_count == 2);
+    C_Node *x = tree->first_child;
+    TEST_EVAL(string_match(x->name, STR("x")));
+    TEST_EVAL(is_literal_int(x->first_child, 1));
+    arena_clear(&arena);
+  }
+
+  // STATIC
+  TEST_BLOCK(STR("Static variable"))
+  {
+    String code = STR("static int x;");
+    C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+    C_Node *root = parse_c_tokens(&arena, tokens);
+    C_Node *decl = root->first_child;
+    TEST_EVAL(decl->type == C_NODE_VARIABLE_DECLARATION);
+    C_Node *type = decl->first_child;
+    TEST_EVAL(type->declaration_flags & C_DECLARATION_FLAG_STATIC);
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Cast - basic"))
+  {
+    C_Node *tree = parse_expression(&arena, STR("(int)x"));
+    TEST_EVAL(is_unary(tree, C_UNARY_CAST));
+    C_Node *type = tree->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE);
+    TEST_EVAL(string_match(type->name, STR("int")));
+    C_Node *operand = type->first_child;
+    TEST_EVAL(is_identifier(operand, STR("x")));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Cast - to pointer type"))
+  {
+    C_Node *tree = parse_expression(&arena, STR("(int *)x"));
+    TEST_EVAL(is_unary(tree, C_UNARY_CAST));
+    C_Node *type = tree->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE_POINTER);
+    TEST_EVAL(type->first_child->type == C_NODE_TYPE);
+    TEST_EVAL(string_match(type->first_child->name, STR("int")));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Cast - on expression"))
+  {
+    C_Node *tree = parse_expression(&arena, STR("(float)(a + b)"));
+    TEST_EVAL(is_unary(tree, C_UNARY_CAST));
+    C_Node *type = tree->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE);
+    C_Node *operand = type->first_child;
+    TEST_EVAL(is_binary(operand, C_BINARY_ADD));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Cast - precedence with multiply"))
+  {
+    C_Node *tree = parse_expression(&arena, STR("(int)a * b"));
+    // Should be: ((int)a) * b
+    TEST_EVAL(is_binary(tree, C_BINARY_MULTIPLY));
+    C_Node *left = tree->first_child;
+    TEST_EVAL(is_unary(left, C_UNARY_CAST));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("b")));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Cast - chained"))
+  {
+    C_Node *tree = parse_expression(&arena, STR("(int)(float)x"));
+    TEST_EVAL(is_unary(tree, C_UNARY_CAST));
+    C_Node *inner = tree->first_child->first_child;
+    TEST_EVAL(is_unary(inner, C_UNARY_CAST));
+    C_Node *type = inner->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE);
+    TEST_EVAL(string_match(type->name, STR("float")));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Cast - void pointer"))
+  {
+    C_Node *tree = parse_expression(&arena, STR("(void *)x"));
+    TEST_EVAL(is_unary(tree, C_UNARY_CAST));
+    C_Node *type = tree->first_child;
+    TEST_EVAL(type->type == C_NODE_TYPE_POINTER);
+    TEST_EVAL(string_match(type->first_child->name, STR("void")));
+    arena_clear(&arena);
+  }
+
+  TEST_BLOCK(STR("Cast - const pointer"))
+  {
+    C_Node *tree = parse_expression(&arena, STR("(const int *)x"));
+    TEST_EVAL(is_unary(tree, C_UNARY_CAST));
+    C_Node *ptr = tree->first_child;
+    TEST_EVAL(ptr->type == C_NODE_TYPE_POINTER);
+    TEST_EVAL(ptr->first_child->declaration_flags & C_DECLARATION_FLAG_CONST);
+    arena_clear(&arena);
+  }
+
 #endif
 
   tester_summarize();
 
   String code = STR(
-    // "typedef float foo;\n"
-    // "const int * const *a[10][12] = 1;\n"
+    "typedef float foo;\n"
+    "const int * const *a[10][12] = 1;\n"
+
+    "struct foo;\n"
+    "struct boo\n"
+    "{\n"
+    "  int a;"
+    "  int b;"
+    "} goo;\n"
     //
-    // "struct foo;\n"
-    // "struct boo\n"
-    // "{\n"
-    // "  int a;"
-    // "  int b;"
-    // "} goo;\n"
-    // //
-    // "enum boo\n"
-    // "{\n"
-    // "  A = 1,\n"
-    // "  B,\n"
-    // "}\n"
+    "enum boo\n"
+    "{\n"
+    "  A = 1,\n"
+    "  B,\n"
+    "}\n"
 
     "void test(float boo, int bar)\n"
     "{\n"

@@ -546,10 +546,10 @@ int main(int argc, char **argv)
 
     C_Node *decl = root->first_child;
     TEST_EVAL(decl->type == C_NODE_VARIABLE_DECLARATION);
-    TEST_EVAL(decl->child_count == 2);
+    TEST_EVAL(decl->child_count == 1);
 
     C_Node *type = decl->first_child;
-    TEST_EVAL(type->type == C_NODE_TYPE);
+    TEST_EVAL(type->type == C_NODE_DECLARATOR);
     TEST_EVAL(string_match(type->name, STR("int")));
 
     C_Node *name = decl->first_child->next_sibling;
@@ -965,15 +965,15 @@ int main(int argc, char **argv)
     arena_clear(&arena);
   }
 
-  // TEST_BLOCK(STR("Break and continue"))
-  // {
-  //   String code = STR("void f() { while (1) { if (x) break; else continue; } }");
-  //   C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
-  //   C_Node *root = parse_c_tokens(&arena, tokens);
-  //   TEST_EVAL(!root->parent->had_error); // no parse errors
-  //   arena_clear(&arena);
-  // }
-
+  // // TEST_BLOCK(STR("Break and continue"))
+  // // {
+  // //   String code = STR("void f() { while (1) { if (x) break; else continue; } }");
+  // //   C_Tokenize_Result tokens = tokenize_c_code(&arena, code);
+  // //   C_Node *root = parse_c_tokens(&arena, tokens);
+  // //   TEST_EVAL(!root->parent->had_error); // no parse errors
+  // //   arena_clear(&arena);
+  // // }
+  //
   TEST_BLOCK(STR("Switch statement"))
   {
     String code = STR("void f() { switch (x) { case 1: break; case 2: break; } }");
@@ -1213,8 +1213,11 @@ int main(int argc, char **argv)
 
   String code = STR(
     // "typedef float foo;\n"
-    "const int * const *a[10][12] = 1;\n"
-    // "const int * const (*)a;\n"
+    // "const int * const *a[10][12] = 1;\n"
+    // "const int * const *a[10];\n"
+
+    "int *a[10];\n"
+    "int (*a)[10];\n"
     //
     // "struct foo;\n"
     // "struct boo\n"

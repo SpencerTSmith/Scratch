@@ -395,7 +395,7 @@ b32 c_binary_is_right_associative(C_Binary binary)
 }
 
 static
-C_Token c_parse_peek_token(C_Parser parser, isize offset)
+C_Token c_parse_peek(C_Parser parser, isize offset)
 {
   C_Token result = {0};
 
@@ -410,7 +410,7 @@ C_Token c_parse_peek_token(C_Parser parser, isize offset)
 static
 b32 c_parse_match(C_Parser *parser, C_Token_Type type)
 {
-  return c_parse_peek_token(*parser, 0).type == type;
+  return c_parse_peek(*parser, 0).type == type;
 }
 
 static
@@ -470,7 +470,7 @@ String c_get_line(String source, usize wish_line)
 static
 void c_parse_error(C_Parser *parser, char *format, ...)
 {
-  C_Token current_token = c_parse_peek_token(*parser, 0);
+  C_Token current_token = c_parse_peek(*parser, 0);
 
   usize line_number = current_token.line;
   String line = c_get_line(parser->source, line_number);
@@ -553,7 +553,7 @@ C_Declaration_Flags c_parse_declaration_flag_chain(C_Parser *parser)
 
   while (true)
   {
-    C_Token maybe_flag = c_parse_peek_token(*parser, 0);
+    C_Token maybe_flag = c_parse_peek(*parser, 0);
 
     C_Declaration_Flags flag = c_token_to_declaration_flag(maybe_flag);
 
@@ -570,28 +570,6 @@ C_Declaration_Flags c_parse_declaration_flag_chain(C_Parser *parser)
 }
 
 static
-C_Node *c_parse_pointer_chain(Arena *arena, C_Parser *parser, C_Node *base_type)
-{
-  C_Node *result = base_type;
-
-  // Build left leaning tree, pointers are left associative
-
-  while (c_parse_eat(parser, C_TOKEN_STAR))
-  {
-    C_Node *pointer = c_new_node(arena, C_NODE_TYPE_POINTER);
-
-    // Flags immediately following are also left associative
-    pointer->declaration_flags |= c_parse_declaration_flag_chain(parser);
-
-    c_node_add_child(pointer, result);
-
-    result = pointer;
-  }
-
-  return result;
-}
-
-static
 C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence);
 
 static
@@ -599,25 +577,6 @@ C_Node *c_parse_postfix_declarators(Arena *arena, C_Parser *parser, C_Node *afte
 {
   C_Node *result = after_pointers_type;
 
-  while (c_parse_eat(parser, C_TOKEN_BEGIN_SQUARE_BRACE))
-  {
-    C_Node *array = c_new_node(arena, C_NODE_TYPE_ARRAY);
-    c_node_add_child(array, result);
-
-
-    // NOTE: 2nd child will be array count
-    // NOTE: No type checking for array count expression here.
-    C_Node *array_count = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
-    c_node_add_child(array, array_count);
-
-    result = array;
-
-    if (!c_parse_eat(parser, C_TOKEN_CLOSE_SQUARE_BRACE))
-    {
-      c_parse_error(parser, "Expected closing square brace in array type declaration.");
-      break;
-    }
-  }
 
   return result;
 }
@@ -632,7 +591,7 @@ C_Node *c_parse_base_type(Arena *arena, C_Parser *parser)
   // Pre-type flags
   C_Declaration_Flags flags = c_parse_declaration_flag_chain(parser);
 
-  C_Token token = c_parse_peek_token(*parser, 0);
+  C_Token token = c_parse_peek(*parser, 0);
 
   if (c_token_is_type_keyword(token))
   {
@@ -664,7 +623,7 @@ C_Node *c_parse_identifier(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_nil_node();
 
-  C_Token token = c_parse_peek_token(*parser, 0);
+  C_Token token = c_parse_peek(*parser, 0);
 
   if (token.type == C_TOKEN_IDENTIFIER)
   {
@@ -683,7 +642,7 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
   C_Node *result = c_nil_node();
 
   // I suppose this check is not necessary since only called in one place.
-  if (c_parse_peek_token(*parser, 0).type == C_TOKEN_IDENTIFIER)
+  if (c_parse_peek(*parser, 0).type == C_TOKEN_IDENTIFIER)
   {
     result = c_new_node(arena, C_NODE_FUNCTION_CALL);
 
@@ -719,13 +678,13 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 }
 
 static
-C_Node *c_parse_full_declarator(Arena *arena, C_Parser *parser, b32 want_identifier);
+C_Node *c_parse_full_declarators(Arena *arena, C_Parser *parser);
 
 // We parse identifiers, function calls, prefix unary ops, and open parenthesis here.
 static
 C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
 {
-  C_Token token = c_parse_peek_token(*parser, 0);
+  C_Token token = c_parse_peek(*parser, 0);
 
   C_Node *result = c_nil_node();
 
@@ -788,7 +747,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
   }
   else if (token.type == C_TOKEN_IDENTIFIER)
   {
-    C_Token peek = c_parse_peek_token(*parser, 1);
+    C_Token peek = c_parse_peek(*parser, 1);
 
     if (peek.type != C_TOKEN_BEGIN_PARENTHESIS)
     {
@@ -819,7 +778,8 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS);
 
     // Check if we can parse this as an abstract declarator
-    C_Node *type = c_parse_full_declarator(arena, parser, false);
+    C_Node *type = c_parse_full_declarators(arena, parser);
+    // TODO: Check that this is truly an abstract declarator.
 
     // It is a unary cast if we were able to parse a declarator..
     if (type != c_nil_node())
@@ -861,7 +821,8 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
       result->unary = C_UNARY_SIZEOF;
 
       // Try to get an abstract declarator
-      C_Node *child = c_parse_full_declarator(arena, parser, false);
+      C_Node *child = c_parse_full_declarators(arena, parser);
+    // TODO: Check that this is truly an abstract declarator.
 
       // We couldn't get an abstract declarator, has to be expression.
       if (child == c_nil_node())
@@ -890,7 +851,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
   // Idea from https://www.youtube.com/watch?v=fIPO4G42wYE&t=4260s
   while (true)
   {
-    C_Token peek = c_parse_peek_token(*parser, 0);
+    C_Token peek = c_parse_peek(*parser, 0);
 
     if (c_token_is_binary_operator(peek))
     {
@@ -979,7 +940,7 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
   // on the right side of the tree when our parent is =, +=, -=, etc.
   // This could potentially be put into the main loop, but since this is just such a special case I decided against it.
 
-  C_Token post_peek = c_parse_peek_token(*parser, 0);
+  C_Token post_peek = c_parse_peek(*parser, 0);
   if (post_peek.type == C_TOKEN_QUESTION &&
       c_operator_precedence(post_peek, false, false) >= min_precedence)
   {
@@ -1011,39 +972,115 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
   return result;
 }
 
-// Will also return the subsequent identifier in out_identifier,
-// As a nice side effect parsing base type will work for parsing struct/enum declarations and subsequent pointer/postfix/identifier checks will do nothing
-// (of course if we get valid syntax, you could potentially have a const struct declaration, invalid postfix on struct declaration with no identifier)
-//
-// Can also parse abstract declarators if pass true for wish_abstract, just skips parsing an identifier... for sizeof(), casts, etc.
+typedef struct C_Declarator_Item C_Declarator_Item;
+struct C_Declarator_Item
+{
+  C_Node *type_tree;
+  C_Node *identifier;
+};
+
 static
-C_Node *c_parse_full_declarator(Arena *arena, C_Parser *parser, b32 want_identifier)
+C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
+{
+  C_Declarator_Item result =
+  {
+    .type_tree  = c_nil_node(),
+    .identifier = c_nil_node()
+  };
+
+  C_Node *pointer_tree = c_nil_node();
+  // Grab pointers.
+  // Build left leaning tree, pointers are left associative.
+  while (c_parse_eat(parser, C_TOKEN_STAR))
+  {
+    C_Node *pointer = c_new_node(arena, C_NODE_TYPE_POINTER);
+
+    // Flags immediately following are also left associative
+    pointer->declaration_flags |= c_parse_declaration_flag_chain(parser);
+
+    c_node_add_child(pointer, pointer_tree);
+
+    pointer_tree = pointer;
+  }
+
+  // Potentially grab an identifier, a grouped declarator piece, or nothing if abstract.
+  C_Token peek = c_parse_peek(*parser, 0);
+  if (peek.type == C_TOKEN_IDENTIFIER)
+  {
+    result.identifier = c_parse_identifier(arena, parser);
+  }
+  else if (peek.type == C_TOKEN_BEGIN_PARENTHESIS)
+  {
+    c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS);
+
+    result = c_parse_declarator_item(arena, parser);
+
+    if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
+    {
+      c_parse_error(parser, "Expected closing parenthesis in grouped declarator");
+    }
+  }
+  // Else its an abstract declarator.
+
+  // Grab the post fix declarator pieces, [], ()
+  // TODO: Handle () here.
+  while (c_parse_eat(parser, C_TOKEN_BEGIN_SQUARE_BRACE))
+  {
+    C_Node *array = c_new_node(arena, C_NODE_TYPE_ARRAY);
+    c_node_add_child(array, result.type_tree);
+
+    // NOTE: 2nd child will be array count
+    // NOTE: No type checking for array count expression here.
+    C_Node *array_count = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+    c_node_add_child(array, array_count);
+
+    if (!c_parse_eat(parser, C_TOKEN_CLOSE_SQUARE_BRACE))
+    {
+      c_parse_error(parser, "Expected closing square brace in array type declaration.");
+      break;
+    }
+
+    result.type_tree = array;
+  }
+
+  // Finally attach pointers
+  if (pointer_tree != c_nil_node())
+  {
+    c_node_add_child(pointer_tree, result.type_tree);
+    result.type_tree = pointer_tree;
+  }
+
+  return result;
+}
+
+static
+C_Node *c_parse_declarator(Arena *arena, C_Parser *parser, C_Node *base_type)
+{
+  C_Node *result = c_new_node(arena, C_NODE_DECLARATOR);
+  C_Declarator_Item item = c_parse_declarator_item(arena, parser);
+  c_node_add_child(result, base_type);
+  c_node_add_child(result, item.type_tree);
+  c_node_add_child(result, item.identifier);
+
+  return result;
+}
+
+// For parsing things like int i ... float j ... struct Foo_T j
+// As a nice side effect parsing base type will work for parsing struct/enum declarations and subsequent pointer/postfix/identifier checks will do nothing
+// (of course if we get valid syntax, you could potentially have a const struct declaration, invalid postfix on struct declaration with no identifier, should probably do error checking that case...)
+//
+// Can also parse abstract declarators if want_identifier is false.
+static
+C_Node *c_parse_full_declarators(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_nil_node();
 
-  C_Node *base_type = c_parse_base_type(arena, parser);
-
-  // Only if we at least get a base type.
+  // Try to grab the base type.
+  C_Node *base_type  = c_parse_base_type(arena, parser);
   if (base_type != c_nil_node())
   {
-    C_Node *after_pointers_type = c_parse_pointer_chain(arena, parser, base_type);
-
-    C_Node *identifier = c_parse_identifier(arena, parser);
-    b32 should_continue = true; // Just because I don't like early returns aesthetically.
-    if (want_identifier && identifier == c_nil_node())
-    {
-      c_parse_error(parser, "Expected identifier in declarator.");
-      should_continue = false;
-    }
-
-    if (should_continue)
-    {
-      C_Node *after_postfix_type = c_parse_postfix_declarators(arena, parser, after_pointers_type);
-
-      result = c_new_node(arena, C_NODE_DECLARATOR);
-      c_node_add_child(result, after_postfix_type); // First child is type tree.
-      c_node_add_child(result, identifier);         // Second is identifier, if non-abstract and got one.
-    }
+    // TODO: Loop and collect all comma separated.
+    result = c_parse_declarator(arena, parser, base_type);
   }
 
   return result;
@@ -1073,7 +1110,7 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_nil_node();
 
-  C_Node *declarator = c_parse_full_declarator(arena, parser, true);
+  C_Node *declarator = c_parse_full_declarators(arena, parser);
 
   if (declarator != c_nil_node())
   {
@@ -1098,7 +1135,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_nil_node();
 
-  C_Token peek = c_parse_peek_token(*parser, 0);
+  C_Token peek = c_parse_peek(*parser, 0);
   switch (peek.type)
   {
     case C_TOKEN_SEMICOLON: { c_parse_eat(parser, C_TOKEN_SEMICOLON); } break;
@@ -1302,7 +1339,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
 
         if (c_parse_eat(parser, C_TOKEN_COLON))
         {
-          C_Token case_or_close_maybe = c_parse_peek_token(*parser, 0);
+          C_Token case_or_close_maybe = c_parse_peek(*parser, 0);
 
           b32 got_default = is_default;
 
@@ -1325,7 +1362,7 @@ C_Node *c_parse_statement(Arena *arena, C_Parser *parser)
             C_Node *statement = c_parse_statement(arena, parser);
             c_node_add_child(result, statement);
 
-            case_or_close_maybe = c_parse_peek_token(*parser, 0);
+            case_or_close_maybe = c_parse_peek(*parser, 0);
           }
         }
         else
@@ -1495,7 +1532,7 @@ C_Node *c_parse_enum_or_struct_declaration(Arena *arena, C_Parser *parser, C_Tok
         if (is_struct)
         {
           // TODO: Error checking and reporting here
-          C_Node *member = c_parse_full_declarator(arena, parser, true);
+          C_Node *member = c_parse_full_declarators(arena, parser);
           c_node_add_child(result, member);
         }
         else
@@ -1538,7 +1575,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
 {
   C_Node *result = c_nil_node();
 
-  C_Token token = c_parse_peek_token(*parser, 0);
+  C_Token token = c_parse_peek(*parser, 0);
 
   if (token.type == C_TOKEN_SEMICOLON)
   {
@@ -1546,7 +1583,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
   }
   // Label
   else if (token.type == C_TOKEN_IDENTIFIER &&
-      c_parse_peek_token(*parser, 1).type == C_TOKEN_COLON)
+      c_parse_peek(*parser, 1).type == C_TOKEN_COLON)
   {
     result = c_new_node(arena, C_NODE_LABEL);
     C_Node *name = c_parse_identifier(arena, parser);
@@ -1561,7 +1598,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
     result = c_new_node(arena, C_NODE_TYPEDEF);
 
     // Identifier in declarator just becomes alias.
-    C_Node *declarator = c_parse_full_declarator(arena, parser, true);
+    C_Node *declarator = c_parse_full_declarators(arena, parser);
     c_node_add_child(result, declarator);
 
     if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
@@ -1572,7 +1609,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
   // More complex stuff. Valid options include a variable, function, or struct/enum declaration.
   else
   {
-    C_Node *maybe_declarator = c_parse_full_declarator(arena, parser, true);
+    C_Node *maybe_declarator = c_parse_full_declarators(arena, parser);
 
     // If we were able to get something check for struct/enum or variable or function declaration.
     if (maybe_declarator != c_nil_node())
@@ -1611,7 +1648,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
           {
             do
             {
-              C_Node *parameter = c_parse_full_declarator(arena, parser, true);
+              C_Node *parameter = c_parse_full_declarators(arena, parser);
               c_node_add_child(result, parameter);
             }
             while (c_parse_eat(parser, C_TOKEN_COMMA));

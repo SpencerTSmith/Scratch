@@ -1039,7 +1039,9 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
       else
       {
         C_Node *cursor = result.type_tree;
-        while (cursor->first_child != c_nil_node())
+        while (cursor->first_child != c_nil_node() &&
+               (cursor->first_child->type == C_NODE_TYPE_ARRAY ||
+                cursor->first_child->type == C_NODE_TYPE_POINTER))
         {
           cursor = cursor->first_child;
         }
@@ -1054,7 +1056,7 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
       result.type_tree = array;
     }
 
-    // NOTE: 2nd child will be array count
+    // FIXME: Ok it has now become urgent to fix the super generic links between nodes
     C_Node *array_count = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
     c_node_add_child(array, array_count);
 
@@ -1065,7 +1067,7 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
     }
   }
 
-  // Attach pointer tree to bottom.
+  // Attach pointer tree to bottom, after having parsed it earlier.
   if (result.type_tree == c_nil_node())
   {
     result.type_tree = pointer_tree;

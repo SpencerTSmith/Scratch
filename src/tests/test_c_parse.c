@@ -1220,6 +1220,7 @@ int main(int argc, char **argv)
     "int *const *a[10];\n"
     "int (*a)[10];\n"
     "int * const(*a)[10];\n"
+    "int *(*const *a)[10];\n"
     // "int *(** const a)[10][11];\n"
     //
     // "struct foo;\n"

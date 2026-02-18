@@ -433,7 +433,7 @@ void arena_clear(Arena *arena);
   !(first) ? ((new_node)->next = 0, (first) = (last) = (new_node)) : \
    ((last)->next = (new_node), (new_node)->next = 0, (last) = (new_node))
 
-#define DLL_push_last_nil(first, last, new_node, next, prev, nil)                          \
+#define DLL_push_last_nil(first, last, new_node, next, prev, nil)                                    \
   (first) == nil ? ((new_node)->next = nil, (new_node)->prev = nil, (first) = (last) = (new_node)) : \
    ((last)->next = (new_node), (new_node)->next = nil, (new_node)->prev = (last), (last) = (new_node))
 

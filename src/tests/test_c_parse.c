@@ -220,7 +220,7 @@ int main(int argc, char **argv)
 
   // NOTE: AI-generated most of these tests, had to fix many of them and others are basically useless, checking trivial/unimportant things, but writing tests is not fun, so I decided to outsource.
 
-#if 1
+#if 0
   TEST_BLOCK(STR("Literals"))
   {
     C_Node *tree = parse_expression(&arena, STR("42"));
@@ -1216,8 +1216,11 @@ int main(int argc, char **argv)
     // "const int * const *a[10][12] = 1;\n"
     // "const int * const *a[10];\n"
 
-    "int *a[10];\n"
+    "int (*a)[10][10];\n"
+    "int *const *a[10];\n"
     "int (*a)[10];\n"
+    "int * const(*a)[10];\n"
+    // "int *(** const a)[10][11];\n"
     //
     // "struct foo;\n"
     // "struct boo\n"

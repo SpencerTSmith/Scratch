@@ -1022,7 +1022,8 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
   }
   // Else its an abstract declarator.
 
-  // Grab the post fix declarator pieces, [], ()
+  // Grab the post fix declarator pieces, [], ()... we directly modify the type tree
+  // here since it binds tightly.
   // TODO: Handle () here.
   while (c_parse_eat(parser, C_TOKEN_BEGIN_SQUARE_BRACE))
   {
@@ -1043,7 +1044,7 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
     result.type_tree = array;
   }
 
-  // Finally attach pointers
+  // Finally attach pointers we collected at this level of recursion.
   if (pointer_tree != c_nil_node())
   {
     c_node_add_child(pointer_tree, result.type_tree);

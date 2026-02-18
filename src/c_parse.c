@@ -1075,7 +1075,9 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
   else
   {
     C_Node *cursor = result.type_tree;
-    while (cursor->first_child != c_nil_node())
+    while (cursor->first_child != c_nil_node() &&
+            (cursor->first_child->type == C_NODE_TYPE_ARRAY ||
+            cursor->first_child->type == C_NODE_TYPE_POINTER))
     {
       cursor = cursor->first_child;
     }

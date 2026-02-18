@@ -1216,12 +1216,16 @@ int main(int argc, char **argv)
     // "const int * const *a[10][12] = 1;\n"
     // "const int * const *a[10];\n"
 
+    "int a;\n"
+    "int a[10];\n"
+    "int *a;\n"
+    "int *a[10];\n"
     "int (*a)[10][10];\n"
     "int *const *a[10];\n"
     "int (*a)[10];\n"
     "int * const(*a)[10];\n"
     "int *(*const *a)[10];\n"
-    // "int *(** const a)[10][11];\n"
+    "int *(** const a)[10][11];\n"
     //
     // "struct foo;\n"
     // "struct boo\n"

@@ -10,8 +10,6 @@
 //
 // TODO:
 // - Functionality:
-//   - Expressions
-//     - sizeof, alignof, etc
 //   - Type parsing
 //     - Struct bit fields
 //     - Refactor declarator as its own node type with the type tree as first child and identifier as 2nd child.
@@ -34,6 +32,7 @@
   X(C_NODE_VARIABLE_DECLARATION) \
   X(C_NODE_STRUCT_DECLARATION)   \
   X(C_NODE_ENUM_DECLARATION)     \
+  X(C_NODE_DECLARATOR)           \
   X(C_NODE_FUNCTION_DECLARATION) \
   X(C_NODE_TYPEDEF)              \
   X(C_NODE_UNARY)                \
@@ -688,13 +687,13 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_nil_node();
 
-  C_Token identifier = c_parse_peek_token(*parser, 0);
-
-  if (identifier.type == C_TOKEN_IDENTIFIER)
+  // I suppose this check is not necessary since only called in one place.
+  if (c_parse_peek_token(*parser, 0).type == C_TOKEN_IDENTIFIER)
   {
     result = c_new_node(arena, C_NODE_FUNCTION_CALL);
 
-    result->name = identifier.raw;
+    C_Node *identifier = c_parse_identifier(arena, parser);
+    c_node_add_child(result, identifier);
 
     c_parse_eat(parser, C_TOKEN_IDENTIFIER);
 
@@ -1474,12 +1473,9 @@ C_Node *c_parse_enum_or_struct_declaration(Arena *arena, C_Parser *parser, C_Tok
   {
     result = c_new_node(arena, type);
 
-    // Non-anonymous
-    if (c_parse_match(parser, C_TOKEN_IDENTIFIER))
-    {
-      result->name = c_parse_peek_token(*parser, 0).raw;
-      c_parse_eat(parser, C_TOKEN_IDENTIFIER);
-    }
+    // Non-anonymous if we get a non-nil back here.
+    C_Node *identifier = c_parse_identifier(arena, parser);
+    c_node_add_child(result, identifier);
 
     if (c_parse_eat(parser, C_TOKEN_BEGIN_CURLY_BRACE))
     {

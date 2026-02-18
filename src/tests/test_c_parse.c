@@ -218,7 +218,7 @@ int main(int argc, char **argv)
 {
   Arena arena = arena_make();
 
-  // NOTE: AI-generated most of these tests, had to fix many of them but was good for this at least.
+  // NOTE: AI-generated most of these tests, had to fix many of them and others are basically useless, checking trivial/unimportant things, but writing tests is not fun, so I decided to outsource.
 
 #if 1
   TEST_BLOCK(STR("Literals"))
@@ -413,8 +413,8 @@ int main(int argc, char **argv)
     C_Node *tree = parse_expression(&arena, STR("foo()"));
 
     TEST_EVAL(tree->type == C_NODE_FUNCTION_CALL);
-    TEST_EVAL(string_match(tree->name, STR("foo")));
-    TEST_EVAL(tree->child_count == 0);
+    TEST_EVAL(string_match(tree->first_child->name, STR("foo")));
+    TEST_EVAL(tree->child_count == 1);
 
     arena_clear(&arena);
   }
@@ -424,10 +424,10 @@ int main(int argc, char **argv)
     C_Node *tree = parse_expression(&arena, STR("foo(a, b)"));
 
     TEST_EVAL(tree->type == C_NODE_FUNCTION_CALL);
-    TEST_EVAL(string_match(tree->name, STR("foo")));
-    TEST_EVAL(tree->child_count == 2);
-    TEST_EVAL(is_identifier(tree->first_child, STR("a")));
-    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("b")));
+    TEST_EVAL(string_match(tree->first_child->name, STR("foo")));
+    TEST_EVAL(tree->child_count == 3);
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling, STR("a")));
+    TEST_EVAL(is_identifier(tree->first_child->next_sibling->next_sibling, STR("b")));
 
     arena_clear(&arena);
   }
@@ -802,8 +802,8 @@ int main(int argc, char **argv)
     C_Node *root = parse_c_tokens(&arena, tokens);
     C_Node *decl = root->first_child;
     TEST_EVAL(decl->type == C_NODE_STRUCT_DECLARATION);
-    TEST_EVAL(string_match(decl->name, STR("Foo")));
-    TEST_EVAL(decl->child_count == 0);
+    TEST_EVAL(string_match(decl->first_child->name, STR("Foo")));
+    TEST_EVAL(decl->child_count == 1);
     arena_clear(&arena);
   }
 
@@ -814,8 +814,8 @@ int main(int argc, char **argv)
     C_Node *root = parse_c_tokens(&arena, tokens);
     C_Node *decl = root->first_child;
     TEST_EVAL(decl->type == C_NODE_STRUCT_DECLARATION);
-    TEST_EVAL(string_match(decl->name, STR("Foo")));
-    TEST_EVAL(decl->child_count == 2);
+    TEST_EVAL(string_match(decl->first_child->name, STR("Foo")));
+    TEST_EVAL(decl->child_count == 3);
     arena_clear(&arena);
   }
 
@@ -838,8 +838,8 @@ int main(int argc, char **argv)
     C_Node *root = parse_c_tokens(&arena, tokens);
     C_Node *decl = root->first_child;
     TEST_EVAL(decl->type == C_NODE_ENUM_DECLARATION);
-    TEST_EVAL(string_match(decl->name, STR("Color")));
-    TEST_EVAL(decl->child_count == 3);
+    TEST_EVAL(string_match(decl->first_child->name, STR("Color")));
+    TEST_EVAL(decl->child_count == 4);
     arena_clear(&arena);
   }
 
@@ -850,7 +850,7 @@ int main(int argc, char **argv)
     C_Node *root = parse_c_tokens(&arena, tokens);
     C_Node *decl = root->first_child;
     TEST_EVAL(decl->type == C_NODE_ENUM_DECLARATION);
-    C_Node *a = decl->first_child;
+    C_Node *a = decl->first_child->next_sibling;
     TEST_EVAL(string_match(a->name, STR("A")));
     TEST_EVAL(is_literal_int(a->first_child, 1));
     C_Node *b = a->next_sibling;
@@ -1212,9 +1212,9 @@ int main(int argc, char **argv)
   tester_summarize();
 
   String code = STR(
-      "int i = sizeof(a[0]);"
     // "typedef float foo;\n"
-    // "const int * const *a[10][12] = 1;\n"
+    "const int * const *a[10][12] = 1;\n"
+    "const int * const (*)a;\n"
     //
     // "struct foo;\n"
     // "struct boo\n"

@@ -543,11 +543,6 @@ b32 c_parse_incomplete(C_Parser parser)
   return parser.at < parser.tokens.count && !parser.had_error;
 }
 
-struct foo
-{
-
-};
-
 static
 C_Node *c_parse_enum_or_struct_declaration(Arena *arena, C_Parser *parser, C_Token_Type enum_or_struct);
 
@@ -724,7 +719,7 @@ C_Node *c_parse_function_call(Arena *arena, C_Parser *parser)
 }
 
 static
-C_Node *c_parse_full_declarator(Arena *arena, C_Parser *parser, C_Node **out_identifier, b32 wish_abstract);
+C_Node *c_parse_full_declarator(Arena *arena, C_Parser *parser, b32 want_identifier);
 
 // We parse identifiers, function calls, prefix unary ops, and open parenthesis here.
 static
@@ -824,7 +819,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
     c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS);
 
     // Check if we can parse this as an abstract declarator
-    C_Node *type = c_parse_full_declarator(arena, parser, 0, true);
+    C_Node *type = c_parse_full_declarator(arena, parser, false);
 
     // It is a unary cast if we were able to parse a declarator..
     if (type != c_nil_node())
@@ -866,7 +861,7 @@ C_Node *c_parse_expression_start(Arena *arena, C_Parser *parser)
       result->unary = C_UNARY_SIZEOF;
 
       // Try to get an abstract declarator
-      C_Node *child = c_parse_full_declarator(arena, parser, 0, true);
+      C_Node *child = c_parse_full_declarator(arena, parser, false);
 
       // We couldn't get an abstract declarator, has to be expression.
       if (child == c_nil_node())
@@ -1022,21 +1017,36 @@ C_Node *c_parse_expression(Arena *arena, C_Parser *parser, i32 min_precedence)
 //
 // Can also parse abstract declarators if pass true for wish_abstract, just skips parsing an identifier... for sizeof(), casts, etc.
 static
-C_Node *c_parse_full_declarator(Arena *arena, C_Parser *parser, C_Node **out_identifier, b32 wish_abstract)
+C_Node *c_parse_full_declarator(Arena *arena, C_Parser *parser, b32 want_identifier)
 {
+  C_Node *result = c_nil_node();
+
   C_Node *base_type = c_parse_base_type(arena, parser);
 
-  C_Node *after_pointers = c_parse_pointer_chain(arena, parser, base_type);
-
-  if (!wish_abstract)
+  // Only if we at least get a base type.
+  if (base_type != c_nil_node())
   {
+    C_Node *after_pointers_type = c_parse_pointer_chain(arena, parser, base_type);
+
     C_Node *identifier = c_parse_identifier(arena, parser);
-    *out_identifier = identifier;
+    b32 should_continue = true; // Just because I don't like early returns aesthetically.
+    if (want_identifier && identifier == c_nil_node())
+    {
+      c_parse_error(parser, "Expected identifier in declarator.");
+      should_continue = false;
+    }
+
+    if (should_continue)
+    {
+      C_Node *after_postfix_type = c_parse_postfix_declarators(arena, parser, after_pointers_type);
+
+      result = c_new_node(arena, C_NODE_DECLARATOR);
+      c_node_add_child(result, after_postfix_type); // First child is type tree.
+      c_node_add_child(result, identifier);         // Second is identifier, if non-abstract and got one.
+    }
   }
 
-  C_Node *after_postfix = c_parse_postfix_declarators(arena, parser, after_pointers);
-
-  return after_postfix;
+  return result;
 }
 
 static
@@ -1063,14 +1073,12 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
 {
   C_Node *result = c_nil_node();
 
-  C_Node *identifier = c_nil_node();
-  C_Node *declarator = c_parse_full_declarator(arena, parser, &identifier, false);
+  C_Node *declarator = c_parse_full_declarator(arena, parser, true);
 
-  if (declarator != c_nil_node() && identifier != c_nil_node())
+  if (declarator != c_nil_node())
   {
     result = c_new_node(arena, C_NODE_VARIABLE_DECLARATION);
     c_node_add_child(result, declarator);
-    c_node_add_child(result, identifier);
 
     C_Node *init = c_parse_variable_init(arena, parser);
     c_node_add_child(result, init);
@@ -1487,7 +1495,7 @@ C_Node *c_parse_enum_or_struct_declaration(Arena *arena, C_Parser *parser, C_Tok
         if (is_struct)
         {
           // TODO: Error checking and reporting here
-          C_Node *member = c_parse_variable_declaration(arena, parser);
+          C_Node *member = c_parse_full_declarator(arena, parser, true);
           c_node_add_child(result, member);
         }
         else
@@ -1552,10 +1560,9 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
 
     result = c_new_node(arena, C_NODE_TYPEDEF);
 
-    C_Node *alias = c_nil_node();
-    C_Node *type = c_parse_full_declarator(arena, parser, &alias, false);
-    c_node_add_child(result, type);
-    c_node_add_child(result, alias);
+    // Identifier in declarator just becomes alias.
+    C_Node *declarator = c_parse_full_declarator(arena, parser, true);
+    c_node_add_child(result, declarator);
 
     if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
     {
@@ -1565,8 +1572,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
   // More complex stuff. Valid options include a variable, function, or struct/enum declaration.
   else
   {
-    C_Node *maybe_identifier = c_nil_node();
-    C_Node *maybe_declarator = c_parse_full_declarator(arena, parser, &maybe_identifier, false);
+    C_Node *maybe_declarator = c_parse_full_declarator(arena, parser, true);
 
     // If we were able to get something check for struct/enum or variable or function declaration.
     if (maybe_declarator != c_nil_node())
@@ -1574,7 +1580,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
       // NOTE: We need to check if this is JUST a struct/enum declaration without declaring a variable with it.
       // that is, no identifier
       b32 is_only_struct_or_enum = (maybe_declarator->type == C_NODE_STRUCT_DECLARATION || maybe_declarator->type == C_NODE_ENUM_DECLARATION) &&
-                                   (maybe_identifier == c_nil_node());
+                                   (maybe_declarator->child_count != 2);
 
       if (is_only_struct_or_enum)
       {
@@ -1599,14 +1605,13 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
         {
           result = c_new_node(arena, C_NODE_FUNCTION_DECLARATION);
           c_node_add_child(result, maybe_declarator);
-          c_node_add_child(result, maybe_identifier);
 
           // 3rd child until last are parameters, don't go into this loop if we immediately see a close parenthesis
           while (!c_parse_match(parser, C_TOKEN_CLOSE_PARENTHESIS))
           {
             do
             {
-              C_Node *parameter = c_parse_variable_declaration(arena, parser);
+              C_Node *parameter = c_parse_full_declarator(arena, parser, true);
               c_node_add_child(result, parameter);
             }
             while (c_parse_eat(parser, C_TOKEN_COMMA));
@@ -1643,7 +1648,6 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
         {
           result = c_new_node(arena, C_NODE_VARIABLE_DECLARATION);
           c_node_add_child(result, maybe_declarator);
-          c_node_add_child(result, maybe_identifier);
 
           C_Node *init = c_parse_variable_init(arena, parser);
           c_node_add_child(result, init);

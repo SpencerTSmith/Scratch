@@ -1140,12 +1140,13 @@ C_Node *c_parse_declarator(Arena *arena, C_Parser *parser, C_Node *base_type)
 static
 C_Node *c_parse_full_declarators(Arena *arena, C_Parser *parser)
 {
-  C_Node *result = c_new_node(arena, C_NODE_DECLARATOR_LIST);
+  C_Node *result = c_nil_node();
 
   // Try to grab the base type.
   C_Node *base_type  = c_parse_base_type(arena, parser);
   if (base_type != c_nil_node())
   {
+    result = c_new_node(arena, C_NODE_DECLARATOR_LIST);
     do
     {
       C_Node *declarator = c_parse_declarator(arena, parser, base_type);
@@ -1715,11 +1716,15 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
 
           if (c_parse_match(parser, C_TOKEN_BEGIN_CURLY_BRACE))
           {
-            // FIXME: Pass in bool for whether at top level? or just carry that state in parser?
-            // NOTE: Only valid to have a function definition at top level scope,
-            // or not a function pointer.
-            C_Node *definition = c_parse_block(arena, parser);
-            c_node_add_child(result, definition);
+            if (at_top_level)
+            {
+              C_Node *definition = c_parse_block(arena, parser);
+              c_node_add_child(result, definition);
+            }
+            else
+            {
+              c_parse_error(parser, "Function definition only allowed at top level scope.");
+            }
           }
         }
         // Variable thing

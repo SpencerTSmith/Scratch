@@ -1001,7 +1001,6 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
     pointer_tree = pointer;
   }
 
-  b32 got_grouped = false;
   // Potentially grab an identifier, a grouped declarator piece, or nothing if abstract.
   C_Token peek = c_parse_peek(*parser, 0);
   if (peek.type == C_TOKEN_IDENTIFIER)
@@ -1013,7 +1012,6 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
     c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS);
 
     result = c_parse_declarator_item(arena, parser);
-    got_grouped = true;
 
     if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
     {
@@ -1022,38 +1020,31 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
   }
   // Else its an abstract declarator.
 
+  // Traverse all the way to the bottom.
+  C_Node *result_leaf = result.type_tree;
+  while (result_leaf->first_child != c_nil_node() &&
+         (result_leaf->first_child->type == C_NODE_TYPE_ARRAY ||
+          result_leaf->first_child->type == C_NODE_TYPE_POINTER))
+  {
+    result_leaf = result_leaf->first_child;
+  }
+
   // Grab the post fix declarator pieces, [], ()...
   // TODO: Handle () here.
   while (c_parse_eat(parser, C_TOKEN_BEGIN_SQUARE_BRACE))
   {
     C_Node *array = c_new_node(arena, C_NODE_TYPE_ARRAY);
 
-    // If we got grouped, then what we have so far should be the parent.
-    // i.e. int (* a)[10] should be a pointer to an array of 10 ints.
-    if (got_grouped)
+    // Always on bottom.
+    if (result.type_tree == c_nil_node())
     {
-      if (result.type_tree == c_nil_node())
-      {
-        result.type_tree = array;
-      }
-      else
-      {
-        C_Node *cursor = result.type_tree;
-        while (cursor->first_child != c_nil_node() &&
-               (cursor->first_child->type == C_NODE_TYPE_ARRAY ||
-                cursor->first_child->type == C_NODE_TYPE_POINTER))
-        {
-          cursor = cursor->first_child;
-        }
-        c_node_add_child(cursor, array);
-      }
+      result.type_tree = array;
+      result_leaf      = array;
     }
-    // Else the array should wrap around what we have so far
-    // i.e. int *a[10] a is an array of 10 pointers to ints
     else
     {
-      c_node_add_child(array, result.type_tree);
-      result.type_tree = array;
+      c_node_add_child(result_leaf, array);
+      result_leaf = array;
     }
 
     // FIXME: Ok it has now become urgent to fix the super generic links between nodes
@@ -1074,14 +1065,7 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
   }
   else
   {
-    C_Node *cursor = result.type_tree;
-    while (cursor->first_child != c_nil_node() &&
-            (cursor->first_child->type == C_NODE_TYPE_ARRAY ||
-            cursor->first_child->type == C_NODE_TYPE_POINTER))
-    {
-      cursor = cursor->first_child;
-    }
-    c_node_add_child(cursor, pointer_tree);
+    c_node_add_child(result_leaf, pointer_tree);
   }
 
   return result;

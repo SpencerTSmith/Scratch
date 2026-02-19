@@ -1225,7 +1225,11 @@ int main(int argc, char **argv)
     // "int (*a)[10];\n"
     // "int * const(*a)[10];\n"
     // "int const *(*const *a)[10];\n"
-    "int *(** const a)[10][11];\n"
+    // "int *(** const a)[10][11];\n"
+    // "int (*(*a)[10])[20];\n"
+    // "int *(*a)(int foo);\n"
+    "int *a(int foo) { return 0; }\n"
+    // "int *a, b;\n"
     //
     // "struct foo;\n"
     // "struct boo\n"

@@ -6,16 +6,15 @@
 #include "c_tokenize.h"
 
 // FIXME:
+// FIXME:
+// FIXME:
+// FIXME:
 // - Will probably need to start having distinct types for statement links, once start actually using the AST
 //
 // TODO:
 // - Functionality:
 //   - Type parsing
 //     - Struct bit fields
-//     - Refactor declarator as its own node type with the type tree as first child and identifier as 2nd child.
-//     - Function pointers
-//     - Parentheses in general, don't think it needs a precedence level parser like for expressions
-//         since only 2 tokens -- * and ( -- possible, so loop while * and recurse on (
 //     - Comma separated identifiers for same declarator i.e. int i, j;
 //     - Caching these for typechecking/referencing in symbol table
 //   - Symbol Table(s)
@@ -25,6 +24,7 @@
   X(C_NODE_IDENTIFIER)           \
   X(C_NODE_TYPE)                 \
   X(C_NODE_TYPE_POINTER)         \
+  X(C_NODE_TYPE_FUNCTION)        \
   X(C_NODE_TYPE_ARRAY)           \
   X(C_NODE_LITERAL)              \
   X(C_NODE_COMPOUND_LITERAL)     \
@@ -32,6 +32,7 @@
   X(C_NODE_VARIABLE_DECLARATION) \
   X(C_NODE_STRUCT_DECLARATION)   \
   X(C_NODE_ENUM_DECLARATION)     \
+  X(C_NODE_DECLARATOR_LIST)      \
   X(C_NODE_DECLARATOR)           \
   X(C_NODE_FUNCTION_DECLARATION) \
   X(C_NODE_TYPEDEF)              \
@@ -527,10 +528,9 @@ C_Node *c_new_node(Arena *arena, C_Node_Type type)
 static
 void c_node_add_child(C_Node *parent, C_Node *child)
 {
-  child->parent = parent;
-
   if (child != c_nil_node())
   {
+    child->parent = parent;
     DLL_push_last_nil(parent->first_child, parent->last_child,
                       child, next_sibling, prev_sibling, c_nil_node());
     parent->child_count += 1;
@@ -980,6 +980,9 @@ struct C_Declarator_Item
 };
 
 static
+C_Node *c_parse_block(Arena *arena, C_Parser *parser);
+
+static
 C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
 {
   C_Declarator_Item result =
@@ -989,6 +992,7 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
   };
 
   // Grab pointers. Left leaning tree
+  // But don't attach yet! We attach these last at the bottom.
   C_Node *pointer_tree = c_nil_node();
   while (c_parse_eat(parser, C_TOKEN_STAR))
   {
@@ -1011,6 +1015,7 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
   {
     c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS);
 
+    // We recurse because we want whatever comes out of this to be at the top of the current tree.
     result = c_parse_declarator_item(arena, parser);
 
     if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
@@ -1020,40 +1025,84 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
   }
   // Else its an abstract declarator.
 
-  // Traverse all the way to the bottom.
-  C_Node *result_leaf = result.type_tree;
-  while (result_leaf->first_child != c_nil_node() &&
-         (result_leaf->first_child->type == C_NODE_TYPE_ARRAY ||
-          result_leaf->first_child->type == C_NODE_TYPE_POINTER))
+  // Traverse all the way to the bottom. We must attach the array, then the pointers,
+  // in that order.
+  C_Node *result_bottom = result.type_tree;
+  while (result_bottom->first_child != c_nil_node() &&
+         (result_bottom->first_child->type == C_NODE_TYPE_ARRAY ||
+          result_bottom->first_child->type == C_NODE_TYPE_POINTER))
   {
-    result_leaf = result_leaf->first_child;
+    result_bottom = result_bottom->first_child;
   }
 
   // Grab the post fix declarator pieces, [], ()...
-  // TODO: Handle () here.
-  while (c_parse_eat(parser, C_TOKEN_BEGIN_SQUARE_BRACE))
+  while (true)
   {
-    C_Node *array = c_new_node(arena, C_NODE_TYPE_ARRAY);
-
-    // Always on bottom.
-    if (result.type_tree == c_nil_node())
+    // Array
+    if (c_parse_eat(parser, C_TOKEN_BEGIN_SQUARE_BRACE))
     {
-      result.type_tree = array;
-      result_leaf      = array;
+      C_Node *array = c_new_node(arena, C_NODE_TYPE_ARRAY);
+
+      // Always on bottom.
+      if (result_bottom == c_nil_node())
+      {
+        result.type_tree = array;
+        result_bottom      = array;
+      }
+      else
+      {
+        c_node_add_child(result_bottom, array);
+        result_bottom = array;
+      }
+
+      // FIXME: Ok it has now become urgent to fix the super generic links between nodes
+      C_Node *array_count = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
+      c_node_add_child(array, array_count);
+
+      if (!c_parse_eat(parser, C_TOKEN_CLOSE_SQUARE_BRACE))
+      {
+        c_parse_error(parser, "Expected closing square brace in array type declaration.");
+        break;
+      }
+    }
+    // Function.
+    else if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
+    {
+      C_Node *function = c_new_node(arena, C_NODE_TYPE_FUNCTION);
+
+      b32 is_function_pointer = false;
+
+      // Always on bottom.
+      if (result_bottom == c_nil_node())
+      {
+        result.type_tree = function;
+        result_bottom    = function;
+      }
+      else
+      {
+        c_node_add_child(result_bottom, function);
+        result_bottom = function;
+      }
+
+      while (!c_parse_match(parser, C_TOKEN_CLOSE_PARENTHESIS))
+      {
+        do
+        {
+          // Even function pointers may have non-abstract declarator parameters,
+          // so we should be fine to do the same thing for all cases.
+          C_Node *parameter = c_parse_full_declarators(arena, parser);
+          c_node_add_child(function, parameter);
+        }
+        while (c_parse_eat(parser, C_TOKEN_COMMA));
+      }
+
+      if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
+      {
+        c_parse_error(parser, "Expected close parenthesis at end of function parameter list");
+      }
     }
     else
     {
-      c_node_add_child(result_leaf, array);
-      result_leaf = array;
-    }
-
-    // FIXME: Ok it has now become urgent to fix the super generic links between nodes
-    C_Node *array_count = c_parse_expression(arena, parser, C_MIN_PRECEDENCE);
-    c_node_add_child(array, array_count);
-
-    if (!c_parse_eat(parser, C_TOKEN_CLOSE_SQUARE_BRACE))
-    {
-      c_parse_error(parser, "Expected closing square brace in array type declaration.");
       break;
     }
   }
@@ -1065,7 +1114,7 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
   }
   else
   {
-    c_node_add_child(result_leaf, pointer_tree);
+    c_node_add_child(result_bottom, pointer_tree);
   }
 
   return result;
@@ -1091,14 +1140,17 @@ C_Node *c_parse_declarator(Arena *arena, C_Parser *parser, C_Node *base_type)
 static
 C_Node *c_parse_full_declarators(Arena *arena, C_Parser *parser)
 {
-  C_Node *result = c_nil_node();
+  C_Node *result = c_new_node(arena, C_NODE_DECLARATOR_LIST);
 
   // Try to grab the base type.
   C_Node *base_type  = c_parse_base_type(arena, parser);
   if (base_type != c_nil_node())
   {
-    // TODO: Loop and collect all comma separated.
-    result = c_parse_declarator(arena, parser, base_type);
+    do
+    {
+      C_Node *declarator = c_parse_declarator(arena, parser, base_type);
+      c_node_add_child(result, declarator);
+    } while (c_parse_eat(parser, C_TOKEN_COMMA));
   }
 
   return result;
@@ -1141,9 +1193,6 @@ C_Node *c_parse_variable_declaration(Arena *arena, C_Parser *parser)
 
   return result;
 }
-
-static
-C_Node *c_parse_block(Arena *arena, C_Parser *parser);
 
 static
 C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level);
@@ -1601,7 +1650,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
   }
   // Label
   else if (token.type == C_TOKEN_IDENTIFIER &&
-      c_parse_peek(*parser, 1).type == C_TOKEN_COLON)
+           c_parse_peek(*parser, 1).type == C_TOKEN_COLON)
   {
     result = c_new_node(arena, C_NODE_LABEL);
     C_Node *name = c_parse_identifier(arena, parser);
@@ -1630,11 +1679,11 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
     C_Node *maybe_declarator = c_parse_full_declarators(arena, parser);
 
     // If we were able to get something check for struct/enum or variable or function declaration.
+    // FIXME: THis can be majorly simplified now.
     if (maybe_declarator != c_nil_node())
     {
-      // NOTE: We need to check if this is JUST a struct/enum declaration without declaring a variable with it.
-      // that is, no identifier
-      b32 is_only_struct_or_enum = (maybe_declarator->type == C_NODE_STRUCT_DECLARATION || maybe_declarator->type == C_NODE_ENUM_DECLARATION) &&
+      // NOTE: We need to check if this is JUST a struct/enum declaration without declaring a variable with it. that is, no identifier
+      b32 is_only_struct_or_enum = (maybe_declarator->type == C_NODE_STRUCT_DECLARATION ||                           maybe_declarator->type == C_NODE_ENUM_DECLARATION) &&
                                    (maybe_declarator->child_count != 2);
 
       if (is_only_struct_or_enum)
@@ -1655,49 +1704,24 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
       // Else is a variable / function declaration
       else
       {
-        // Function thing
-        if (c_parse_eat(parser, C_TOKEN_BEGIN_PARENTHESIS))
+        // Holy jank
+        b32 is_function = maybe_declarator->child_count == 1 &&
+                          maybe_declarator->first_child->first_child->next_sibling->type == C_NODE_TYPE_FUNCTION;
+        if (is_function)
         {
-          result = c_new_node(arena, C_NODE_FUNCTION_DECLARATION);
-          c_node_add_child(result, maybe_declarator);
+          // HACK:
+          result = maybe_declarator;
+          result->type = C_NODE_FUNCTION_DECLARATION;
 
-          // 3rd child until last are parameters, don't go into this loop if we immediately see a close parenthesis
-          while (!c_parse_match(parser, C_TOKEN_CLOSE_PARENTHESIS))
-          {
-            do
-            {
-              C_Node *parameter = c_parse_full_declarators(arena, parser);
-              c_node_add_child(result, parameter);
-            }
-            while (c_parse_eat(parser, C_TOKEN_COMMA));
-          }
-
-          if (!c_parse_eat(parser, C_TOKEN_CLOSE_PARENTHESIS))
-          {
-            c_parse_error(parser, "Expected close parenthesis for function declaration");
-          }
-
-          // Parse definition block.
           if (c_parse_match(parser, C_TOKEN_BEGIN_CURLY_BRACE))
           {
-            // Only at top level though.
-            if (at_top_level)
-            {
-              C_Node *definition = c_parse_block(arena, parser);
-              c_node_add_child(result, definition);
-            }
-            else
-            {
-              c_parse_error(parser, "Function declaration not at top level.");
-            }
-          }
-          // Or a semicolon.
-          else if (!c_parse_eat(parser, C_TOKEN_SEMICOLON))
-          {
-            c_parse_error(parser, "Expected semicolon or function definition block.");
+            // FIXME: Pass in bool for whether at top level? or just carry that state in parser?
+            // NOTE: Only valid to have a function definition at top level scope,
+            // or not a function pointer.
+            C_Node *definition = c_parse_block(arena, parser);
+            c_node_add_child(result, definition);
           }
         }
-
         // Variable thing
         else
         {

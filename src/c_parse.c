@@ -22,7 +22,9 @@
 #define C_Node_Type(X)           \
   X(C_NODE_NONE)                 \
   X(C_NODE_IDENTIFIER)           \
-  X(C_NODE_TYPE)                 \
+  X(C_NODE_TYPE_PRIMITIVE)       \
+  X(C_NODE_TYPE_STRUCT)          \
+  X(C_NODE_TYPE_ENUM)            \
   X(C_NODE_TYPE_POINTER)         \
   X(C_NODE_TYPE_FUNCTION)        \
   X(C_NODE_TYPE_ARRAY)           \
@@ -496,16 +498,11 @@ C_Node *c_nil_node()
 {
   static C_Node nil = {0};
 
-  static b32 init = false;
-
-  if (!init)
-  {
-    nil.first_child  = &nil;
-    nil.last_child   = &nil;
-    nil.next_sibling = &nil;
-    nil.prev_sibling = &nil;
-    init = true;
-  }
+  nil.parent       = &nil;
+  nil.first_child  = &nil;
+  nil.last_child   = &nil;
+  nil.next_sibling = &nil;
+  nil.prev_sibling = &nil;
 
   return &nil;
 }
@@ -1147,6 +1144,7 @@ C_Node *c_parse_full_declarators(Arena *arena, C_Parser *parser)
   if (base_type != c_nil_node())
   {
     result = c_new_node(arena, C_NODE_DECLARATOR_LIST);
+
     do
     {
       C_Node *declarator = c_parse_declarator(arena, parser, base_type);

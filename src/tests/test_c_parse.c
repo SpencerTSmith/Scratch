@@ -1234,7 +1234,7 @@ int main(int argc, char **argv)
     // "struct foo;\n"
     "struct boo\n"
     "{\n"
-    "  int a;"
+    "  int a, b;"
     "  int b;"
     "} goo;\n"
     // //

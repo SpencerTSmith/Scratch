@@ -1,0 +1,36 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{booktabs}
+
+\title{CS 4033 Project 1}
+\author{Your Name}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Design Choices Made by the Assignment}
+
+The following choices were made by the assignment specification:
+
+\begin{itemize}
+    \item \textbf{Learning paradigm:} Supervised learning, as labeled class data is provided.
+    \item \textbf{Task type:} Binary classification — each sample belongs to one of two classes.
+    \item \textbf{Architecture type:} Feedforward neural network with error backpropagation.
+    \item \textbf{Loss signal:} Classification error between predicted and true class label.
+    \item \textbf{Datasets:} Nine fixed datasets across Gaussian 2D, Gaussian 3D, and crescent moon distributions.
+\end{itemize}
+
+\section{Design Choices Made by Us}
+
+The following choices were made during implementation:
+
+\begin{itemize}
+    \item \textbf{Hidden layers:} One hidden layer, as the universal approximation theorem guarantees a single hidden layer is sufficient to approximate any continuous function given enough neurons.
+    \item \textbf{Hidden neurons:} 32 neurons per hidden layer.
+    \item \textbf{Activation function:} Sigmoid, $\sigma(x) = \frac{1}{1 + e^{-x}}$, chosen for its smooth gradient and natural probabilistic interpretation for binary classification. Also simple derivative.
+    \item \textbf{Learning rate:} $\eta = 0.1$
+    \item \textbf{Weight initialization:} Uniform random in $[-1, 1]$.
+\end{itemize}
+
+\end{document}

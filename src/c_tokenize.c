@@ -576,7 +576,7 @@ C_Tokenize_Result tokenize_c_code(Arena *arena, String code)
         f64 exponent = 0.0;
         while (c_lexer_in_bounds(lexer, end) && char_is_digit(lexer.source.v[end]))
         {
-          u64 digit = char_to_digit(lexer.source.v[end]);
+          f64 digit = char_to_digit(lexer.source.v[end]);
           exponent = 10 * exponent + digit;
           end += 1;
 

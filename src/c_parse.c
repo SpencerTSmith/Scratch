@@ -1,188 +1,6 @@
-#ifndef C_PARSE
-#define C_PARSE
-
 #include "common.h"
 
-#include "c_tokenize.h"
-
-// FIXME:
-// FIXME:
-// FIXME:
-// FIXME:
-// - Will probably need to start having distinct types for statement links, once start actually using the AST
-//
-// TODO:
-// - Functionality:
-//   - Type parsing
-//     - Struct bit fields
-//     - Comma separated identifiers for same declarator i.e. int i, j;
-//     - Caching these for typechecking/referencing in symbol table
-//   - Symbol Table(s)
-
-#define C_Node_Type(X)           \
-  X(C_NODE_NONE)                 \
-  X(C_NODE_IDENTIFIER)           \
-  X(C_NODE_TYPE_PRIMITIVE)       \
-  X(C_NODE_TYPE_STRUCT)          \
-  X(C_NODE_TYPE_ENUM)            \
-  X(C_NODE_TYPE_POINTER)         \
-  X(C_NODE_TYPE_FUNCTION)        \
-  X(C_NODE_TYPE_ARRAY)           \
-  X(C_NODE_LITERAL)              \
-  X(C_NODE_COMPOUND_LITERAL)     \
-  X(C_NODE_ROOT)                 \
-  X(C_NODE_VARIABLE_DECLARATION) \
-  X(C_NODE_STRUCT_DECLARATION)   \
-  X(C_NODE_ENUM_DECLARATION)     \
-  X(C_NODE_DECLARATOR_LIST)      \
-  X(C_NODE_DECLARATOR)           \
-  X(C_NODE_FUNCTION_DECLARATION) \
-  X(C_NODE_TYPEDEF)              \
-  X(C_NODE_UNARY)                \
-  X(C_NODE_BINARY)               \
-  X(C_NODE_TERNARY)              \
-  X(C_NODE_FUNCTION_CALL)        \
-  X(C_NODE_BLOCK)                \
-  X(C_NODE_IF)                   \
-  X(C_NODE_ELSE)                 \
-  X(C_NODE_WHILE)                \
-  X(C_NODE_RETURN)               \
-  X(C_NODE_FOR)                  \
-  X(C_NODE_DO_WHILE)             \
-  X(C_NODE_BREAK)                \
-  X(C_NODE_CONTINUE)             \
-  X(C_NODE_SWITCH)               \
-  X(C_NODE_CASE)                 \
-  X(C_NODE_DEFAULT)              \
-  X(C_NODE_GOTO)                 \
-  X(C_NODE_LABEL)                \
-  X(C_NODE_COUNT)
-
-ENUM_TABLE(C_Node_Type);
-
-#define C_MIN_PRECEDENCE INT32_MIN
-
-typedef enum C_Binary
-{
-  C_BINARY_NONE,
-
-  C_BINARY_ACCESS,
-  C_BINARY_POINTER_ACCESS,
-  C_BINARY_ARRAY_ACCESS,
-  C_BINARY_MULTIPLY,
-  C_BINARY_DIVIDE,
-  C_BINARY_MODULO,
-  C_BINARY_ADD,
-  C_BINARY_SUBTRACT,
-  C_BINARY_LEFT_SHIFT,
-  C_BINARY_RIGHT_SHIFT,
-  C_BINARY_LESS_THAN,
-  C_BINARY_LESS_THAN_EQUAL,
-  C_BINARY_GREATER_THAN,
-  C_BINARY_GREATER_THAN_EQUAL,
-  C_BINARY_COMPARE_EQUAL,
-  C_BINARY_COMPARE_NOT_EQUAL,
-  C_BINARY_BITWISE_AND,
-  C_BINARY_XOR,
-  C_BINARY_BITWISE_OR,
-  C_BINARY_LOGICAL_AND,
-  C_BINARY_LOGICAL_OR,
-  C_BINARY_ASSIGN,
-  C_BINARY_ADD_ASSIGN,
-  C_BINARY_SUBTRACT_ASSIGN,
-  C_BINARY_MULTIPLY_ASSIGN,
-  C_BINARY_DIVIDE_ASSIGN,
-  C_BINARY_MODULO_ASSIGN,
-  C_BINARY_AND_ASSIGN,
-  C_BINARY_OR_ASSIGN,
-  C_BINARY_XOR_ASSIGN,
-  C_BINARY_LEFT_SHIFT_ASSIGN,
-  C_BINARY_RIGHT_SHIFT_ASSIGN,
-  C_BINARY_COMMA,
-
-  C_BINARY_COUNT,
-} C_Binary;
-
-typedef enum C_Unary
-{
-  C_UNARY_NONE,
-
-  C_UNARY_PRE_INCREMENT,
-  C_UNARY_PRE_DECREMENT,
-  C_UNARY_POST_INCREMENT,
-  C_UNARY_POST_DECREMENT,
-  C_UNARY_NEGATE,
-  C_UNARY_PLUS,
-  C_UNARY_REFERENCE,
-  C_UNARY_DEREFERENCE,
-  C_UNARY_BITWISE_NOT,
-  C_UNARY_LOGICAL_NOT,
-  C_UNARY_CAST,
-  C_UNARY_SIZEOF,
-
-  C_UNARY_COUNT,
-} C_Unary;
-
-typedef enum C_Declaration_Flags
-{
-  C_DECLARATION_FLAG_NONE     = 0,
-  C_DECLARATION_FLAG_CONST    = 1 << 0,
-  C_DECLARATION_FLAG_STATIC   = 1 << 1,
-  C_DECLARATION_FLAG_EXTERN   = 1 << 2,
-  C_DECLARATION_FLAG_VOLATILE = 1 << 3,
-  C_DECLARATION_FLAG_RESTRICT = 1 << 4,
-} C_Declaration_Flags;
-
-typedef struct C_Node C_Node;
-
-// Just for acceleration, that is, don't need to traverse the child linked list.
-typedef struct C_Statement_Links C_Statement_Links;
-struct C_Statement_Links
-{
-  C_Node *init;
-  C_Node *condition;
-  C_Node *update;
-};
-
-struct C_Node
-{
-  C_Node_Type type;
-
-  C_Node *parent;
-
-  C_Node *first_child;
-  C_Node *last_child;
-  usize  child_count;
-
-  C_Node *next_sibling;
-  C_Node *prev_sibling;
-
-  C_Statement_Links links;
-
-  C_Declaration_Flags declaration_flags;
-
-  union
-  {
-    String    name;
-    C_Literal literal;
-    C_Binary  binary;
-    C_Unary   unary;
-  };
-};
-
-typedef struct C_Parser C_Parser;
-struct C_Parser
-{
-  String source;
-
-  C_Token_Array tokens;
-  usize         at;
-
-  i32 loop_nests;
-  i32 switch_nests;
-
-  b32 had_error;
-};
+#include "c_parse.h"
 
 typedef struct C_Token_Node_Map C_Token_Node_Map;
 struct C_Token_Node_Map
@@ -271,11 +89,11 @@ b32 c_token_is_type_keyword(C_Token token)
 }
 
 static
-C_Declaration_Flags c_token_to_declaration_flag(C_Token token)
+C_Type_Flags c_token_to_declaration_flag(C_Token token)
 {
   C_Token_Type t = token.type;
 
-  C_Declaration_Flags result = C_DECLARATION_FLAG_NONE;
+  C_Type_Flags result = C_DECLARATION_FLAG_NONE;
 
   switch (t)
   {
@@ -541,18 +359,18 @@ b32 c_parse_incomplete(C_Parser parser)
 }
 
 static
-C_Node *c_parse_enum_or_struct_declaration(Arena *arena, C_Parser *parser, C_Token_Type enum_or_struct);
+C_Node *c_parse_enum_or_struct(Arena *arena, C_Parser *parser, C_Token_Type enum_or_struct);
 
 static
-C_Declaration_Flags c_parse_declaration_flag_chain(C_Parser *parser)
+C_Type_Flags c_parse_declaration_flag_chain(C_Parser *parser)
 {
-  C_Declaration_Flags result = C_DECLARATION_FLAG_NONE;
+  C_Type_Flags result = C_DECLARATION_FLAG_NONE;
 
   while (true)
   {
     C_Token maybe_flag = c_parse_peek(*parser, 0);
 
-    C_Declaration_Flags flag = c_token_to_declaration_flag(maybe_flag);
+    C_Type_Flags flag = c_token_to_declaration_flag(maybe_flag);
 
     if (flag == C_DECLARATION_FLAG_NONE)
     {
@@ -586,21 +404,21 @@ C_Node *c_parse_base_type(Arena *arena, C_Parser *parser)
   C_Node *result = c_nil_node();
 
   // Pre-type flags
-  C_Declaration_Flags flags = c_parse_declaration_flag_chain(parser);
+  C_Type_Flags flags = c_parse_declaration_flag_chain(parser);
 
   C_Token token = c_parse_peek(*parser, 0);
 
   if (c_token_is_type_keyword(token))
   {
-    result = c_new_node(arena, C_NODE_TYPE);
+    result = c_new_node(arena, C_NODE_TYPE_PRIMITIVE);
     result->name = token.raw;
-    result->declaration_flags = flags;
+    result->type_flags = flags;
 
     c_parse_eat(parser, token.type);
   }
   else if (token.type == C_TOKEN_KEYWORD_STRUCT || token.type == C_TOKEN_KEYWORD_ENUM)
   {
-    result = c_parse_enum_or_struct_declaration(arena, parser, token.type);
+    result = c_parse_enum_or_struct(arena, parser, token.type);
   }
   else if (token.type == C_TOKEN_IDENTIFIER) // Custom type
   {
@@ -609,7 +427,7 @@ C_Node *c_parse_base_type(Arena *arena, C_Parser *parser)
   // Post fix flags immediately after still apply to the base type
   if (result != c_nil_node())
   {
-    result->declaration_flags |= c_parse_declaration_flag_chain(parser);
+    result->type_flags |= c_parse_declaration_flag_chain(parser);
   }
 
   return result;
@@ -996,7 +814,7 @@ C_Declarator_Item c_parse_declarator_item(Arena *arena, C_Parser *parser)
     C_Node *pointer = c_new_node(arena, C_NODE_TYPE_POINTER);
 
     // Flags immediately following apply to this pointer
-    pointer->declaration_flags |= c_parse_declaration_flag_chain(parser);
+    pointer->type_flags |= c_parse_declaration_flag_chain(parser);
 
     c_node_add_child(pointer, pointer_tree);
     pointer_tree = pointer;
@@ -1569,14 +1387,14 @@ C_Node *c_parse_block(Arena *arena, C_Parser *parser)
 }
 
 static
-C_Node *c_parse_enum_or_struct_declaration(Arena *arena, C_Parser *parser, C_Token_Type enum_or_struct)
+C_Node *c_parse_enum_or_struct(Arena *arena, C_Parser *parser, C_Token_Type enum_or_struct)
 {
   ASSERT(enum_or_struct == C_TOKEN_KEYWORD_STRUCT || enum_or_struct == C_TOKEN_KEYWORD_ENUM, "Idiot.");
 
   b32 is_struct   = enum_or_struct == C_TOKEN_KEYWORD_STRUCT;
   char *node_name = is_struct ? "struct" : "enum";
 
-  C_Node_Type type = is_struct ? C_NODE_STRUCT_DECLARATION : C_NODE_ENUM_DECLARATION;
+  C_Node_Type type = is_struct ? C_NODE_TYPE_STRUCT : C_NODE_TYPE_ENUM;
 
   C_Node *result = c_nil_node();
 
@@ -1675,21 +1493,20 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
   // More complex stuff. Valid options include a variable, function, or struct/enum declaration.
   else
   {
-    C_Node *maybe_declarator = c_parse_full_declarators(arena, parser);
+    C_Node *declarator_list = c_parse_full_declarators(arena, parser);
 
     // If we were able to get something check for struct/enum or variable or function declaration.
     // FIXME: THis can be majorly simplified now.
-    if (maybe_declarator != c_nil_node())
+    if (declarator_list != c_nil_node())
     {
       // NOTE: We need to check if this is JUST a struct/enum declaration without declaring a variable with it. that is, no identifier
-      b32 is_only_struct_or_enum = (maybe_declarator->type == C_NODE_STRUCT_DECLARATION ||                           maybe_declarator->type == C_NODE_ENUM_DECLARATION) &&
-                                   (maybe_declarator->child_count != 2);
+      b32 is_only_struct_or_enum = (declarator_list->child_count == 1) &&
+                                   (declarator_list->first_child->type == C_NODE_STRUCT_DECLARATION);
 
       if (is_only_struct_or_enum)
       {
-        // TODO: Would be a good spot to print errors about having uncesseary declarator nonsense here,
-        // ie if after_postfix != base_type
-        result = maybe_declarator;
+        result = declarator_list;
+        result = declarator_list;
 
         // Check for semicolon if not at top level or if we didn't have a body (no member children).
         b32 check_semicolon = !at_top_level || result->child_count == 0;
@@ -1704,12 +1521,12 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
       else
       {
         // Holy jank
-        b32 is_function = maybe_declarator->child_count == 1 &&
-                          maybe_declarator->first_child->first_child->next_sibling->type == C_NODE_TYPE_FUNCTION;
+        b32 is_function = declarator_list->child_count == 1 &&
+                          declarator_list->first_child->first_child->next_sibling->type == C_NODE_TYPE_FUNCTION;
         if (is_function)
         {
           // HACK:
-          result = maybe_declarator;
+          result = declarator_list;
           result->type = C_NODE_FUNCTION_DECLARATION;
 
           if (c_parse_match(parser, C_TOKEN_BEGIN_CURLY_BRACE))
@@ -1729,7 +1546,7 @@ C_Node *c_parse_declaration(Arena *arena, C_Parser *parser, b32 at_top_level)
         else
         {
           result = c_new_node(arena, C_NODE_VARIABLE_DECLARATION);
-          c_node_add_child(result, maybe_declarator);
+          c_node_add_child(result, declarator_list);
 
           C_Node *init = c_parse_variable_init(arena, parser);
           c_node_add_child(result, init);
@@ -1773,4 +1590,3 @@ C_Node *parse_c_tokens(Arena *arena, C_Tokenize_Result tokenize_result)
 
   return root;
 }
-#endif // C_PARSE

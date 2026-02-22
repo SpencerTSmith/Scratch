@@ -29,6 +29,7 @@ extern "C"
 // QOL/UTILITY
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <math.h>
@@ -327,7 +328,7 @@ typedef enum OS_Allocation_Flags
  #include <sys/stat.h>
  #include <sys/random.h>
 #elif OS_WINDOWS
- #include <windows.h>
+ // #include <windows.h>
 #elif OS_MAC
 #endif
 
@@ -480,6 +481,7 @@ b32 string_in_bounds(String string, usize at);
 u32 string_hash_u32(String string);
 b32 string_match(String a, String b);
 b32 string_starts_with(String string, String prefix);
+b32 string_contains_substring(String string, String substring);
 
 String string_skip(String string, usize count);
 String string_chop(String string, usize count);
@@ -491,6 +493,7 @@ usize string_find_substring(String string, usize start, String substring);
 
 String string_from_c_string(char *pointer);
 char *string_to_c_string(Arena *arena, String string);
+f64 string_to_f64(String string);
 
 String_Array string_split(Arena *arena, String string, String delimiter);
 String_Array string_split_whitepace(Arena *arena, String string);
@@ -785,7 +788,95 @@ String string_from_c_string(char *pointer)
 char *string_to_c_string(Arena *arena, String string)
 {
   char *result = arena_calloc(arena, string.count + 1, char);
+  result[string.count] = 0;
   MEM_COPY(result, string.v, string.count);
+
+  return result;
+}
+
+f64 string_to_f64(String string)
+{
+  f64 result = 0.0;
+
+  usize at = 0;
+
+  f64 sign = 1.0;
+  if (string.count > at && string.v[at] == '-')
+  {
+    sign = -1.0;
+    at += 1;
+  }
+
+  // Before decimal
+  while (at < string.count)
+  {
+    u8 digit = string.v[at] - (u8)'0';
+    if (digit < 10)
+    {
+      // We go left to right so each previous result is 10 times bigger
+      result = 10 * result + (f64)digit;
+      at += 1;
+    }
+    else // Not a digit
+    {
+      break;
+    }
+  }
+
+  // After decimal (if there)
+  if (at < string.count && string.v[at] == '.')
+  {
+    at += 1;
+
+    f64 factor = 1.0 / 10.0;
+    while (at < string.count)
+    {
+      u8 digit = string.v[at] - (u8)'0';
+      if (digit < 10)
+      {
+        // We go left to right so each additional digit is 10 times smaller
+        result = result + factor * (f64)digit;
+        factor *= 1.0 / 10.0;
+        at += 1;
+      }
+      else // Not a digit
+      {
+        break;
+      }
+    }
+  }
+
+  // Exponent
+  if (at < string.count && (string.v[at] == 'e' || string.v[at] == 'E'))
+  {
+    at += 1;
+
+    f64 e_sign = 1;
+    if (at < string.count && string.v[at] == '-')
+    {
+      e_sign = -1;
+    }
+
+    f64 exponent = 0.0;
+    while (at < string.count)
+    {
+      u8 digit = string.v[at] - (u8)'0';
+      if (digit < 10)
+      {
+        // We go left to right so each previous result is 10 times bigger
+        exponent = 10 * exponent + (f64)digit;
+        at += 1;
+      }
+      else // Not a digit
+      {
+        break;
+      }
+    }
+
+    result *= pow(10.0, e_sign * exponent);
+  }
+
+  result *= sign;
 
   return result;
 }
@@ -875,6 +966,11 @@ usize string_find_substring(String string, usize start, String substring)
   }
 
   return result;
+}
+
+b32 string_contains_substring(String string, String substring)
+{
+  return string_find_substring(string, 0, substring) != string.count;
 }
 
 String_Array string_split(Arena *arena, String string, String delimiter)
@@ -1121,9 +1217,65 @@ b32 os_get_random_bytes(void *dst, usize count)
   return result == count;
 }
 #elif OS_WINDOWS
-// TODO
+// TODO:
+void *os_allocate(usize size, OS_Allocation_Flags flags)
+{
+  return malloc(size);
+}
+
+b32 os_commit(void *start, usize size)
+{
+  return true;
+}
+
+void os_deallocate(void *start, usize size)
+{
+  free(start);
+}
+
+void os_decommit(void *start, usize size)
+{
+}
+
+b32 os_get_random_bytes(void *dst, usize count)
+{
+  u8 *bytes = (u8 *)dst;
+  for (usize i = 0; i < count; i++)
+  {
+    bytes[i] = rand();
+  }
+  return true;
+}
 #elif OS_MAC
-// TODO
+// TODO:
+void *os_allocate(usize size, OS_Allocation_Flags flags)
+{
+  return malloc(size);
+}
+
+b32 os_commit(void *start, usize size)
+{
+  return true;
+}
+
+void os_deallocate(void *start, usize size)
+{
+  free(start);
+}
+
+void os_decommit(void *start, usize size)
+{
+}
+
+b32 os_get_random_bytes(void *dst, usize count)
+{
+  u8 *bytes = (u8 *)dst;
+  for (usize i = 0; i < count; i++)
+  {
+    bytes[i] = rand();
+  }
+  return true;
+}
 #endif
 
 Arena __arena_make(Arena_Args *args)

@@ -9,7 +9,7 @@
 \begin{document}
 \maketitle
 
-\section{Design Choices Made by the Assignment}
+\section{Design Choices Made by the Assignment (Steps 2-3)}
 
 The following choices were made by the assignment specification:
 
@@ -21,16 +21,62 @@ The following choices were made by the assignment specification:
     \item \textbf{Datasets:} Nine fixed datasets across Gaussian 2D, Gaussian 3D, and crescent moon distributions.
 \end{itemize}
 
-\section{Design Choices Made by Us}
+\section{Design Choices For Us to Consider (Steps 4-5)}
 
-The following choices were made during implementation:
+The following choices were considered, as well as what we what we plan on doing:
 
 \begin{itemize}
-    \item \textbf{Hidden layers:} One hidden layer, as the universal approximation theorem guarantees a single hidden layer is sufficient to approximate any continuous function given enough neurons.
-    \item \textbf{Hidden neurons:} 32 neurons per hidden layer.
-    \item \textbf{Activation function:} Sigmoid, $\sigma(x) = \frac{1}{1 + e^{-x}}$, chosen for its smooth gradient and natural probabilistic interpretation for binary classification. Also simple derivative.
-    \item \textbf{Learning rate:} $\eta = 0.1$
-    \item \textbf{Weight initialization:} Uniform random in $[-1, 1]$.
+    \item \textbf{From Scratch:} Do it from scratch in C. Does not seem like we need something complex for this.
+    \item \textbf{Hidden layers:} One hidden layer, as the universal approximation theorem guarantees a single hidden layer is sufficient to approximate any continuous function given enough neurons. Also simplifies things.
+    \item \textbf{Hidden neurons:} 8 neurons per hidden layer.
+    \item \textbf{Activation function:} Sigmoid, $\sigma(x) = \frac{1}{1 + e^{-x}}$, natural probabilistic interpretation for binary classification. Also simple derivative for backprop.
+    \item \textbf{Learning rate:} $\eta = 0.1$ Just a guess
+    \item \textbf{Weight initialization:} Uniform random in $[-1, 1]$. Starting small.
 \end{itemize}
+
+\section{Design Choices After Implementation (Steps 7-8)}
+
+\begin{itemize}
+    \item \textbf{From Scratch:} Yup, did it from scratch.
+    \item \textbf{Hidden layers:} Yup, ended up doing 1 hidden layer since its simple. Made it easy to hard-code backprop formulas.
+    \item \textbf{Hidden neurons:} 32 neurons, actually, since it was easy to add more and in initial testing it seemed to improve things.
+    \item \textbf{Activation function:} Sigmoid, since again it was simple for backprop.
+    \item \textbf{Learning rate:} $\eta = 0.1$ Seems a good rate to have chosen.
+    \item \textbf{Weight initialization:} Uniform random in $[-1, 1]$. Didn't really experiment too much with this, but seems fine.
+    \item \textbf{Epoch Count:} Decided to go with baseline of 10,000 but can stop early if validation shows no loss improvement after 500 epochs.
+    \item \textbf{Train/Validate/Test Division:} Decided to go with a 60/20/20 split since this seemed to be better than others we tried like 75/15/15.
+\end{itemize}
+
+\section{Data Collection (Step 9)}
+
+For each of the nine datasets, the network was trained over 20 independent runs,
+each with a different random weight initialization, keeping everything else the same. The data was, as mentioned before, split 60\% training,
+20\% validation, and 20\% test. The validation set was used to monitor overfitting, and we only tested after the entire training run was complete.
+
+The following data was collected per run:
+\begin{itemize}
+    \item Training loss per epoch, to observe convergence behavior.
+    \item Training, validation, and test accuracy at the end of training.
+\end{itemize}
+
+We report mean and standard deviation of test accuracy across the runs. Since we randomly initialize the weights, we can't tell if our ANN is good or not from just a single run.
+
+We also provide a graph of the loss across epochs from a randomly selected run.
+
+We hope to determine if our ANN is any good from this data, specifically the mean and standard deviation across runs. As well we hope to see whether our ANN converges quickly, or in a consistent manner.
+
+\section{Data Collection}
+\begin{table}
+\centering
+\begin{tabular}{lcc}
+\toprule
+Dataset & Mean Accuracy & Std Dev \\
+\midrule
+Gaussian 2D Wide    & 0.98 & 0.01 \\
+Gaussian 2D Narrow  & 0.91 & 0.03 \\
+\bottomrule
+\end{tabular}
+\caption{Test accuracy across all datasets, 10 runs each}
+\end{table}
 
 \end{document}

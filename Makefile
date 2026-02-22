@@ -35,16 +35,15 @@ address-anatomy: bin-folder
 
 ann: bin-folder
 	${CC} ${CFLAGS} src/ann/ann.c -o bin/ann.x
-	bin/ann.x data/Gaussian\ 2D\ Narrow.csv
-	bin/ann.x data/Gaussian\ 2D\ Narrow.csv
-	bin/ann.x data/Gaussian\ 2D\ Overlap.csv
-	bin/ann.x data/Gaussian\ 2D\ Wide.csv
-	bin/ann.x data/Gaussian\ 3D\ Narrow.csv
-	bin/ann.x data/Gaussian\ 3D\ Overlap.csv
-	bin/ann.x data/Gaussian\ 3D\ Wide.csv
-	bin/ann.x data/Moons\ 2D\ Narrow.csv
-	bin/ann.x data/Moons\ 2D\ Overlap.csv
-	bin/ann.x data/Moons\ 2D\ Wide.csv
+	# bin/ann.x data/Gaussian\ 2D\ Narrow.csv
+	# bin/ann.x data/Gaussian\ 2D\ Overlap.csv
+	# bin/ann.x data/Gaussian\ 2D\ Wide.csv
+	# bin/ann.x data/Gaussian\ 3D\ Narrow.csv
+	# bin/ann.x data/Gaussian\ 3D\ Overlap.csv
+	# bin/ann.x data/Gaussian\ 3D\ Wide.csv
+	# bin/ann.x data/Moons\ 2D\ Narrow.csv
+	# bin/ann.x data/Moons\ 2D\ Overlap.csv
+	# bin/ann.x data/Moons\ 2D\ Wide.csv
 
 everything:
 	${CC} ${CFLAGS} -lX11 src/everything/main.c -o bin/everything.x

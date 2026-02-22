@@ -1,6 +1,8 @@
 #define COMMON_IMPLEMENTATION
 
 #include "../common.h"
+#include <float.h>
+#include <time.h>
 
 // We won't always use all 3 elements, as in the case of 2d data.
 #define MAX_INPUT_COUNT 3
@@ -117,13 +119,16 @@ Labeled_Data load_csv(Arena *arena, String filename)
   return result;
 }
 
-Network init_network(usize input_count)
+Network init_network(i32 seed, usize input_count)
 {
   // Biases will just be 0.
   Network result =
   {
     .input_count = input_count
   };
+
+  // Seed each time we init.
+  srand(seed);
 
   for (usize hidden_idx = 0; hidden_idx < STATIC_COUNT(result.hidden_weights); hidden_idx++)
   {
@@ -196,6 +201,10 @@ void backpropagate(Network *network, Point input, f32 output, f32 target, f32 ra
   network->bias1 += rate * output_delta;
 }
 
+#define RUN_COUNT      20
+#define EPOCH_COUNT    10000
+#define LEARNING_RATE  0.1f
+#define NO_IMPROVEMENT 1000
 int main(int argc, char** argv)
 {
   if (argc == 2)
@@ -205,36 +214,143 @@ int main(int argc, char** argv)
     Arena arena = arena_make();
     Labeled_Data data = load_csv(&arena, filename);
 
-    Network network = init_network(data.input_count);
+    FILE *loss_csv = fopen("loss.csv", "w");
+    fprintf(loss_csv, "epoch,loss\n");
 
-    for (usize epoch = 0; epoch < 1000; epoch++)
+    usize training_count = data.classes[0].count * 0.6;
+    usize validate_count = data.classes[0].count * 0.2;
+    usize test_count     = data.classes[0].count * 0.2;
+
+    // First 2 for the classes, last for the overall.
+    f32 *accuracies[3] =
     {
-      for (usize point_idx = 0; point_idx < data.classes[0].count && point_idx < data.classes[1].count; point_idx++)
+      arena_calloc(&arena, RUN_COUNT, f32),
+      arena_calloc(&arena, RUN_COUNT, f32),
+      arena_calloc(&arena, RUN_COUNT, f32),
+    };
+
+    for (usize run_idx = 0; run_idx < RUN_COUNT; run_idx++)
+    {
+      Network network = init_network(run_idx, data.input_count);
+
+
+      usize best_validate_loss = FLT_MIN;
+      usize no_improvement_count = 0;
+      for (usize epoch = 0; epoch < EPOCH_COUNT; epoch++)
       {
+
+        // Training.
+        for (usize point_idx = 0; point_idx < training_count; point_idx++)
+        {
+          // Interleave classes, seems like a good idea.
+          for (usize class_idx = 0; class_idx < STATIC_COUNT(data.classes); class_idx++)
+          {
+            Point point = data.classes[class_idx].v[point_idx];
+            f32 output = forward_pass(&network, point);
+            backpropagate(&network, point, output, (f32)class_idx, LEARNING_RATE);
+          }
+        }
+
+        // Validate.
+        f32 validate_loss = 0.0f;
         for (usize class_idx = 0; class_idx < STATIC_COUNT(data.classes); class_idx++)
+        {
+          for (usize point_idx = training_count; point_idx < training_count + validate_count; point_idx++)
+          {
+            Point point = data.classes[class_idx].v[point_idx];
+            f32 output = forward_pass(&network, point);
+            f32 error = ((f32)class_idx - output);
+            validate_loss += error * error; // Square error for loss.
+          }
+        }
+        validate_loss /= (validate_count * CLASS_COUNT);
+
+        if (validate_loss < best_validate_loss)
+        {
+          best_validate_loss = validate_loss;
+          no_improvement_count = 0;
+        }
+        else
+        {
+          no_improvement_count += 1;
+
+          if (no_improvement_count > NO_IMPROVEMENT)
+          {
+            break;
+          }
+        }
+
+        if (epoch % 100 == 0)
+        {
+          fprintf(loss_csv, "%lu,%f\n", epoch, validate_loss);
+        }
+      }
+
+      // Test and collect accuracies.
+      f32 total_accuracy = 0.0;
+      for (usize class_idx = 0; class_idx < STATIC_COUNT(data.classes); class_idx++)
+      {
+        usize correct = 0;
+        for (usize point_idx = validate_count; point_idx < validate_count + test_count; point_idx++)
         {
           Point point = data.classes[class_idx].v[point_idx];
           f32 output = forward_pass(&network, point);
-          backpropagate(&network, point, output, (f32)class_idx, 0.1f);
-
-          // printf("Class: %lu, %f\n", class_idx, forward_pass(&network, point));
+          if ((output < 0.5f && class_idx == 0) || (output >= 0.5f && class_idx == 1))
+          {
+            correct += 1;
+          }
         }
+        f32 accuracy = (f32)correct / test_count;
+        accuracies[class_idx][run_idx] = accuracy;
+        total_accuracy += accuracy;
       }
+      total_accuracy /= CLASS_COUNT;
+      accuracies[2][run_idx] = total_accuracy;
     }
 
-    for (usize class_idx = 0; class_idx < STATIC_COUNT(data.classes); class_idx++)
+    f32 mean0 = 0.0f; // Class 0
+    f32 mean1 = 0.0f; // Class 1
+    f32 meanA = 0.0f; // Overall
+    for (usize run_idx = 0; run_idx < RUN_COUNT; run_idx++)
     {
-      f32 avg = 0.0f;
-      for (usize point_idx = 0; point_idx < data.classes[class_idx].count; point_idx++)
-      {
-        Point point = data.classes[class_idx].v[point_idx];
-        f32 output = forward_pass(&network, point);
-        avg += output;
-      }
-      avg /= data.classes[class_idx].count;
-
-      printf("Class: %lu, %f\n", class_idx, avg);
+      mean0 += accuracies[0][run_idx];
+      mean1 += accuracies[1][run_idx];
+      meanA += accuracies[2][run_idx];
     }
+    mean0 /= RUN_COUNT;
+    mean1 /= RUN_COUNT;
+    meanA /= RUN_COUNT;
+
+    printf("Mean Accuracy:\n");
+    printf("  Class 0: %f\n", mean0);
+    printf("  Class 1: %f\n", mean1);
+    printf("  Overall: %f\n", meanA);
+
+    f32 variance0 = 0.0f;
+    f32 variance1 = 0.0f;
+    f32 varianceA = 0.0f;
+    for (int run_idx = 0; run_idx < RUN_COUNT; run_idx++)
+    {
+        f32 diff0 = accuracies[0][run_idx] - mean0;
+        variance0 += diff0 * diff0;
+        f32 diff1 = accuracies[1][run_idx] - mean1;
+        variance1 += diff1 * diff1;
+        f32 diffA = accuracies[2][run_idx] - meanA;
+        varianceA += diffA * diffA;
+    }
+    variance0 /= RUN_COUNT;
+    variance1 /= RUN_COUNT;
+    varianceA /= RUN_COUNT;
+    f32 std_dev0 = sqrtf(variance0);
+    f32 std_dev1 = sqrtf(variance1);
+    f32 std_devA = sqrtf(varianceA);
+
+    printf("Std-Dev Accuracy:\n");
+    printf("  Class 0: %f\n", std_dev0);
+    printf("  Class 1: %f\n", std_dev1);
+    printf("  Overall: %f\n", std_devA);
+
+    arena_free(&arena);
   }
   else
   {

@@ -1,6 +1,6 @@
 #define COMMON_IMPLEMENTATION
-
 #include "../common.h"
+
 #include <float.h>
 #include <time.h>
 
@@ -189,6 +189,7 @@ void backpropagate(Network *network, Point input, f32 output, f32 target, f32 ra
     hidden_delta[hidden_idx] = network->output_weights[hidden_idx] * output_delta * network->hidden_output[hidden_idx] * (1 - network->hidden_output[hidden_idx]);
   }
 
+  // Update everything.
   for (usize hidden_idx = 0; hidden_idx < HIDDEN_COUNT; hidden_idx++)
   {
     network->output_weights[hidden_idx] += rate * output_delta * network->hidden_output[hidden_idx];
@@ -204,7 +205,7 @@ void backpropagate(Network *network, Point input, f32 output, f32 target, f32 ra
 #define RUN_COUNT      20
 #define EPOCH_COUNT    10000
 #define LEARNING_RATE  0.1f
-#define NO_IMPROVEMENT 1000
+#define NO_IMPROVEMENT 500
 int main(int argc, char** argv)
 {
   if (argc == 2)
@@ -229,13 +230,17 @@ int main(int argc, char** argv)
       arena_calloc(&arena, RUN_COUNT, f32),
     };
 
+    srand(time(0));
+    usize run_loss_report_idx = rand() % RUN_COUNT;
+
     for (usize run_idx = 0; run_idx < RUN_COUNT; run_idx++)
     {
       Network network = init_network(run_idx, data.input_count);
 
 
-      usize best_validate_loss = FLT_MIN;
+      f32 best_validate_loss = FLT_MAX;
       usize no_improvement_count = 0;
+
       for (usize epoch = 0; epoch < EPOCH_COUNT; epoch++)
       {
 
@@ -280,7 +285,7 @@ int main(int argc, char** argv)
           }
         }
 
-        if (epoch % 100 == 0)
+        if (run_idx == run_loss_report_idx && epoch % 10 == 0)
         {
           fprintf(loss_csv, "%lu,%f\n", epoch, validate_loss);
         }
@@ -350,6 +355,7 @@ int main(int argc, char** argv)
     printf("  Class 1: %f\n", std_dev1);
     printf("  Overall: %f\n", std_devA);
 
+    fclose(loss_csv);
     arena_free(&arena);
   }
   else

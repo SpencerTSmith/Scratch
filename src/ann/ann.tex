@@ -1,9 +1,12 @@
 \documentclass{article}
 \usepackage{amsmath}
 \usepackage{booktabs}
+\usepackage{pgfplots}
+\usepackage{float}
+\pgfplotsset{compat=1.18}
 
 \title{CS 4033 Project 1}
-\author{Your Name}
+\author{Alexander Greus, Spencer Smith}
 \date{}
 
 \begin{document}
@@ -37,7 +40,7 @@ The following choices were considered, as well as what we what we plan on doing:
 \section{Design Choices After Implementation (Steps 7-8)}
 
 \begin{itemize}
-    \item \textbf{From Scratch:} Yup, did it from scratch.
+    \item \textbf{From Scratch:} Yup, did it from scratch. Didn't end up being too difficult.
     \item \textbf{Hidden layers:} Yup, ended up doing 1 hidden layer since its simple. Made it easy to hard-code backprop formulas.
     \item \textbf{Hidden neurons:} 32 neurons, actually, since it was easy to add more and in initial testing it seemed to improve things.
     \item \textbf{Activation function:} Sigmoid, since again it was simple for backprop.
@@ -65,18 +68,321 @@ We also provide a graph of the loss across epochs from a randomly selected run.
 
 We hope to determine if our ANN is any good from this data, specifically the mean and standard deviation across runs. As well we hope to see whether our ANN converges quickly, or in a consistent manner.
 
-\section{Data Collection}
-\begin{table}
+\section{Results}
+
+\subsection{Gaussian 2D Wide}
+
+\begin{figure}[H]
+\begin{tikzpicture}
+\begin{axis}[
+    xlabel={Epoch},
+    ylabel={Validation Loss},
+    grid=major,
+]
+\addplot table[col sep=comma, x=epoch, y=loss]{g2dwide_loss.csv};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation loss over training epochs, Gaussian 3D Wide}
+\end{figure}
+
+We can observe that validation set loss converges and minimizes quite quickly. We could probably exit even earlier than our 500 epochs of no improvement check. This makes sense since the classes are distributed widely from each other, meaning its a relatively easy classification task.
+
+\begin{table}[H]
 \centering
-\begin{tabular}{lcc}
+\begin{tabular}{lcccccc}
 \toprule
-Dataset & Mean Accuracy & Std Dev \\
+Dataset & \multicolumn{2}{c}{Class 0} & \multicolumn{2}{c}{Class 1} & \multicolumn{2}{c}{Overall} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & Mean & Std & Mean & Std & Mean & Std \\
 \midrule
-Gaussian 2D Wide    & 0.98 & 0.01 \\
-Gaussian 2D Narrow  & 0.91 & 0.03 \\
+Gaussian 2D Wide    & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\
 \bottomrule
 \end{tabular}
-\caption{Test accuracy across all datasets, 10 runs each}
+\caption{Test accuracy across all datasets, 20 runs each}
 \end{table}
+
+We observe that across all runs we correctly classify our entire test set, since we have 0 variance. This seems expected since this distribution has a wide gap been classes.
+
+Overall the ANN seems pretty effective at classifying this problem and dataset.
+
+\subsection{Gaussian 2D Narrow}
+
+\begin{figure}[H]
+\begin{tikzpicture}
+\begin{axis}[
+    xlabel={Epoch},
+    ylabel={Validation Loss},
+    grid=major,
+]
+\addplot table[col sep=comma, x=epoch, y=loss]{g2dnarrow_loss.csv};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation loss over training epochs, Gaussian 3D Narrow}
+\end{figure}
+
+We can observe that validation set loss does not converge as quickly or as smoothly as in the Wide case. We actually reach a minimum loss around ~300 epochs, but our early exit condition is too patient and only exits after 500 epochs of no improvement. Thus we actually and unfortunately start to increase loss, a type of overfitting. This is semi-expected since this is a harder problem, what with the classes being closer together.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+Dataset & \multicolumn{2}{c}{Class 0} & \multicolumn{2}{c}{Class 1} & \multicolumn{2}{c}{Overall} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & Mean & Std & Mean & Std & Mean & Std \\
+\midrule
+Gaussian 2D Narrow    & 0.98 & 0.0292 & 0.9875 & 0.0217 & 0.9838 & 0.0182 \\
+\bottomrule
+\end{tabular}
+\caption{Test accuracy across all datasets, 20 runs each}
+\end{table}
+
+We unfortunately do not always accurately classify all of our training set across runs. We don't seem much variance between class 0 and class 1, so that at least is good and means we are being consistent across classes. We also don't observe much variance at all, meaning the ANN is again relatively consistent.
+
+Overall, the issue here for data seems to be over-fitting, and could be solved with some better checks for when that happens during validation. We do still achieve >98\% accuracy, but we can always improve.
+
+\subsection{Gaussian 2D Overlap}
+
+\begin{figure}[H]
+\begin{tikzpicture}
+\begin{axis}[
+    xlabel={Epoch},
+    ylabel={Validation Loss},
+    grid=major,
+]
+\addplot table[col sep=comma, x=epoch, y=loss]{g2doverlap_loss.csv};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation loss over training epochs, Gaussian 3D Overlap}
+\end{figure}
+
+We again see not great behavior in our validation loss. We actually see a much steeper drop in loss than in the case of Wide, which is surprising since intuitively overlapping should be a harder problem. It is also more consistent than in Wide. Again though, we see the loss climb after reaching a local minimum around ~200 this time. We can see that our overfitting checks are not really sufficient for this problem either.
+
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+Dataset & \multicolumn{2}{c}{Class 0} & \multicolumn{2}{c}{Class 1} & \multicolumn{2}{c}{Overall} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & Mean & Std & Mean & Std & Mean & Std \\
+\midrule
+Gaussian 2D Overlap    & 0.6975 & 0.0512 & 0.9450 & 0.0150 & 0.8213 & 0.0212 \\
+\bottomrule
+\end{tabular}
+\caption{Test accuracy across all datasets, 20 runs each}
+\end{table}
+
+Again we see not great results. Class 1 looks alright, not perfect but not horrible. However, for Class 0, we see a pretty poor accuracy. We are not sure why there is a disparity here, but we assume it may be due to our previously demonstrated over fitting? Again there is not much variance between runs, so at least the poor performance for Class 0 is consistent.
+
+\subsection{Gaussian 3D Wide}
+
+\begin{figure}[H]
+\begin{tikzpicture}
+\begin{axis}[
+    xlabel={Epoch},
+    ylabel={Validation Loss},
+    grid=major,
+]
+\addplot table[col sep=comma, x=epoch, y=loss]{g3dwide_loss.csv};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation loss over training epochs, Gaussian 3D Wide}
+\end{figure}
+
+Back to the easy data, we see very good performance, even better than in the 2D case surprisingly. The loss drops sharply and stays consistent thereafter. We believe the better performance is because it may be easier to classify with more information, where 2 points might overlap in 2 dimensions, the 3rd dimension might separate them.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+Dataset & \multicolumn{2}{c}{Class 0} & \multicolumn{2}{c}{Class 1} & \multicolumn{2}{c}{Overall} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & Mean & Std & Mean & Std & Mean & Std \\
+\midrule
+Gaussian 3D Wide    & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{Test accuracy across all datasets, 20 runs each}
+\end{table}
+
+Again, we see perfect performance across runs, all achieving 100\% accuracy every time. As stated before, we think the extra useful info from the third dimension actually helps rather than hinders.
+
+We observe that our ANN is very good at classifying this dataset.
+
+\subsection{Gaussian 3D Narrow}
+
+\begin{figure}[H]
+\begin{tikzpicture}
+\begin{axis}[
+    xlabel={Epoch},
+    ylabel={Validation Loss},
+    grid=major,
+]
+\addplot table[col sep=comma, x=epoch, y=loss]{g3dnarrow_loss.csv};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation loss over training epochs, Gaussian 3D Narrow}
+\end{figure}
+
+This is one is both surprising and unsurprising. We again see better performance than in the 2D case, but we see the same inconsistency/over-fitting. This time the minimum occurs around ~1100 epochs. As well, the loss decreases in a more gradual manner after the initial drop. Overall, seems pretty good.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+Dataset & \multicolumn{2}{c}{Class 0} & \multicolumn{2}{c}{Class 1} & \multicolumn{2}{c}{Overall} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & Mean & Std & Mean & Std & Mean & Std \\
+\midrule
+Gaussian 3D Narrow    & 0.9775 & 0.0370 & 0.9925 & 0.1785 & 0.9850 & 0.0184 \\
+\bottomrule
+\end{tabular}
+\caption{Test accuracy across all datasets, 20 runs each}
+\end{table}
+
+Here, again we see better performance than in 2D. We see pretty consistent and accurate classification for both classes, with little variance between runs.
+
+Our ANN seems pretty good at this problem.
+
+\subsection{Gaussian 3D Overlap}
+
+\begin{figure}[H]
+\begin{tikzpicture}
+\begin{axis}[
+    xlabel={Epoch},
+    ylabel={Validation Loss},
+    grid=major,
+]
+\addplot table[col sep=comma, x=epoch, y=loss]{g3doverlap_loss.csv};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation loss over training epochs, Gaussian 3D Overlap}
+\end{figure}
+
+Yet again, we see better performance than the 2D case. Interestingly, we also see a sort of similar curve, in that it steadily decreases loss, reaches a minimum, and then begins to regress and increase loss. The minimum occurs around ~350 epochs in this case though.
+
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+Dataset & \multicolumn{2}{c}{Class 0} & \multicolumn{2}{c}{Class 1} & \multicolumn{2}{c}{Overall} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & Mean & Std & Mean & Std & Mean & Std \\
+\midrule
+Gaussian 3D Overlap    & 0.9050 & 0.0150 & 0.9025 & 0.0249 & 0.9038 & 0.0119 \\
+\bottomrule
+\end{tabular}
+\caption{Test accuracy across all datasets, 20 runs each}
+\end{table}
+
+We see much better accuracy for class 0 classification, and slightly worse for class 1, when compared to the 2D case. This is overall better since we performed very poorly on class 0, in the 2D case. Again its pretty consistent, with low standard deviation across runs.
+
+Overall, we were pretty impressed with our performance for this problem.
+
+\subsection{Moon 2D Wide}
+
+\begin{figure}[H]
+\begin{tikzpicture}
+\begin{axis}[
+    xlabel={Epoch},
+    ylabel={Validation Loss},
+    grid=major,
+]
+\addplot table[col sep=comma, x=epoch, y=loss]{m2dwide_loss.csv};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation loss over training epochs, Moon 2D Wide}
+\end{figure}
+
+Like with all wide datasets so far, we perform very well. A steep drop in loss, than flat-lining consistently. I think after looking at all the wide datasets, we attribute our performance mostly to just how easy the dataset is to classify, not that our ANN is too terrible hahaha.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+Dataset & \multicolumn{2}{c}{Class 0} & \multicolumn{2}{c}{Class 1} & \multicolumn{2}{c}{Overall} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & Mean & Std & Mean & Std & Mean & Std \\
+\midrule
+Moon 2D Wide    & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{Test accuracy across all datasets, 20 runs each}
+\end{table}
+
+Again, this is a pretty easy dataset, so our ANN never fails across all runs to get 100\% accuracy. Again, we don't necessarily attribute this success to our ANN architecture, but mostly to just how good the dataset is for classification.
+
+Overall, we perform very well on this dataset.
+
+\subsection{Moon 2D Narrow}
+
+\begin{figure}[H]
+\begin{tikzpicture}
+\begin{axis}[
+    xlabel={Epoch},
+    ylabel={Validation Loss},
+    grid=major,
+]
+\addplot table[col sep=comma, x=epoch, y=loss]{m2dnarrow_loss.csv};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation loss over training epochs, Moon 2D Narrow}
+\end{figure}
+
+This one is slightly surprising, we expected to see the same degradation in performance as in previous cases of moving from wide to narrow. But here we see very little degradation. We see basically the same loss curve, but this time flat-lining a bit above zero. We wonder if this means that the crescent pattern is somehow easier to extract as a pattern than the Gaussian blobs?
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+Dataset & \multicolumn{2}{c}{Class 0} & \multicolumn{2}{c}{Class 1} & \multicolumn{2}{c}{Overall} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & Mean & Std & Mean & Std & Mean & Std \\
+\midrule
+Moon 2D Narrow    & 0.99 & 0.00 & 1.00 & 0.00 & 0.995 & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{Test accuracy across all datasets, 20 runs each}
+\end{table}
+
+Again, not much performance degradation. Just 1 run fails to classify 1 class 0 sample. We are pretty satisfied with the performance in for this problem set, which we are surprised by. We expected the crescent to be harder to classify as its, at least visually, not linearly separable by one line. But apparently that 1 hidden layer is doing some heavy lifting here.
+
+Overall, surprisingly good performance on this dataset.
+
+\subsection{Moon 2D Overlap}
+
+\begin{figure}[H]
+\begin{tikzpicture}
+\begin{axis}[
+    xlabel={Epoch},
+    ylabel={Validation Loss},
+    grid=major,
+]
+\addplot table[col sep=comma, x=epoch, y=loss]{m2doverlap_loss.csv};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation loss over training epochs, Moon 2D Overlap}
+\end{figure}
+
+This one is pretty interesting. Pretty sharp decline, a minimum, and then gradual increase of loss. We see a sort of similar pattern with other overlapping datasets, which might suggest that with overlapping datasets over-fitting is a big issue. We could probably work on tuning our ANN to detect and avoid these issues.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+Dataset & \multicolumn{2}{c}{Class 0} & \multicolumn{2}{c}{Class 1} & \multicolumn{2}{c}{Overall} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+ & Mean & Std & Mean & Std & Mean & Std \\
+\midrule
+Moon 2D Overlap    & 0.97 & 0.00 & 0.957 & 0.0056 & 0.9635 & 0.0028 \\
+\bottomrule
+\end{tabular}
+\caption{Test accuracy across all datasets, 20 runs each}
+\end{table}
+
+One of the better performances for overlapping datasets. Looking at all the datasets now, we want to draw the conclusion that at least for our ANN the crescent pattern is easier to extract. As well, we can now pretty confidently say that while our model is not the best at everything, it is at least pretty consistent, as the std-dev of accuracy has always remained pretty low.
+
+Overall, for making it from scratch, we are pretty happy with our ANN.
 
 \end{document}

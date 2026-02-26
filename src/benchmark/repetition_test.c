@@ -75,6 +75,18 @@ void print_repetition_test_values(const char *label, Repetition_Test_Values valu
 
       printf(", %lu faults (%.4f kb/fault)", page_faults, kb_per_fault);
     }
+
+    u64 flops = values.v[REPTEST_VALUE_FLOP_COUNT] / divisor;
+    if (flops)
+    {
+      printf(", %lu flops", flops);
+    }
+
+    u64 memops = values.v[REPTEST_VALUE_MEMOP_COUNT] / divisor;
+    if (memops)
+    {
+      printf(", %lu memops", memops);
+    }
   }
 }
 

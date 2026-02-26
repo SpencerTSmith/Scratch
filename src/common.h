@@ -396,6 +396,9 @@ void arena_clear(Arena *arena);
 
 // Arena Helpers ---
 
+// NOTE: Helpful for making arrays from c arrays, will evaluate argument twice so be careful.
+#define TO_ARRAY(c_array) {.v = (c_array), .count = STATIC_COUNT((c_array))}
+
 // specify the arena, the number of elements, and the type... c(ounted)alloc
 #define arena_calloc(a, count, T) (T *)arena_alloc((a), sizeof(T) * (count), alignof(T))
 // Useful for structs, much like new in other languages
@@ -502,6 +505,8 @@ String string_join_array(Arena *arena, String_Array array, String separator);
 String string_join_list(Arena *arena, String_List list, String separator);
 
 String string_formatted(Arena *arena, const char* format, ...);
+
+String string_timestamp(Arena *arena);
 
 // Only useful if you know exactly how big the file is ahead of time, otherwise probably put on an arena if don't know...
 // or use file_size()
@@ -1124,6 +1129,25 @@ String string_formatted(Arena *arena, const char* format, ...)
   result.count = vsnprintf((char *)result.v, wish_size, format, var_args1);
 
   va_end(var_args1);
+
+  return result;
+}
+
+#include <time.h>
+// TODO: Less stdlib bullshit
+String string_timestamp(Arena *arena)
+{
+  time_t t = time(NULL);
+  struct tm *time_thing = localtime(&t);
+  i32 year  = time_thing->tm_year + 1900; // why?
+  i32 month = time_thing->tm_mon + 1;
+  i32 day   = time_thing->tm_mday;
+  i32 hour  = time_thing->tm_hour;
+  i32 min   = time_thing->tm_min;
+  i32 sec   = time_thing->tm_sec;
+
+  String result = string_formatted(arena, "%d-%d-%d_%d:%d:%d",
+                                   year, month, day, hour, min, sec);
 
   return result;
 }

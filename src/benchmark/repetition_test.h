@@ -21,6 +21,8 @@ typedef enum Repetition_Test_Value
   REPTEST_VALUE_TIME,
   REPTEST_VALUE_PAGE_FAULTS,
   REPTEST_VALUE_BYTE_COUNT,
+  REPTEST_VALUE_FLOP_COUNT,
+  REPTEST_VALUE_MEMOP_COUNT,
 
   REPTEST_VALUE_COUNT,
 } Repetition_Test_Value;
@@ -70,6 +72,11 @@ void repetition_tester_close_time(Repetition_Tester *tester);
 
 static
 void repetition_tester_count_bytes(Repetition_Tester *tester, u64 bytes);
+
+static
+void repetition_tester_count_flops(Repetition_Tester *tester, u64 count);
+static
+void repetition_tester_count_memops(Repetition_Tester *tester, u64 count);
 
 static
 void repetition_tester_error(Repetition_Tester *tester, const char *message);

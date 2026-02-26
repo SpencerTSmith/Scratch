@@ -1,0 +1,3 @@
+[submodule "src/sparse-research"]
+	path = src/sparse-research
+	url = https://github.com/SpencerTSmith/Mixed-Sparse-Format-Matmul-Research

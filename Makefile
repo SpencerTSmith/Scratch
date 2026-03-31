@@ -34,7 +34,7 @@ address-anatomy: bin-folder
 	bin/address_anatomy.x
 
 ann: bin-folder
-	${CC} ${CFLAGS} src/ann/ann.c -o bin/ann.x
+	${CC} ${CFLAGS} -lm src/ann/ann.c -o bin/ann.x
 	# bin/ann.x data/Gaussian\ 2D\ Narrow.csv
 	# bin/ann.x data/Gaussian\ 2D\ Overlap.csv
 	# bin/ann.x data/Gaussian\ 2D\ Wide.csv

@@ -496,6 +496,7 @@ usize string_find_substring(String string, usize start, String substring);
 
 String string_from_c_string(char *pointer);
 char *string_to_c_string(Arena *arena, String string);
+u64 string_to_u64(String string);
 f64 string_to_f64(String string);
 
 String_Array string_split(Arena *arena, String string, String delimiter);
@@ -551,6 +552,9 @@ Args parse_args(Arena *arena, usize count, char **arguments);
 
 b32 args_has_flag(Args *table, String flag);
 String_Array args_get_option_values(Args *table, String option);
+
+u64 args_get_integer_value(Args *args, String option, u64 default_);
+String args_get_string_value(Args *args, String option, String default_);
 
 
 #ifdef __cplusplus
@@ -797,6 +801,39 @@ char *string_to_c_string(Arena *arena, String string)
   MEM_COPY(result, string.v, string.count);
 
   return result;
+}
+
+u64 string_to_u64(String string)
+{
+  // NOTE: Use signed here since may have negative... should be same bits
+  i64 result = 0;
+
+  usize at = 0;
+
+  i64 sign = 1;
+  if (string.count > at && string.v[at] == '-')
+  {
+    sign = -1;
+    at += 1;
+  }
+
+  // Before decimal
+  while (at < string.count)
+  {
+    u8 digit = string.v[at] - (u8)'0';
+    if (digit < 10)
+    {
+      // We go left to right so each previous result is 10 times bigger
+      result = 10 * result + (i64)digit;
+      at += 1;
+    }
+    else // Not a digit
+    {
+      break;
+    }
+  }
+
+  return (u64)result;
 }
 
 f64 string_to_f64(String string)
@@ -1537,7 +1574,40 @@ b32 args_has_flag(Args *table, String flag)
 
 String_Array args_get_option_values(Args *table, String option)
 {
-  return find_arg_option(table, option)->values;
+  String_Array result = {0};
+
+  if (args_has_flag(table, option))
+  {
+    result = find_arg_option(table, option)->values;
+  }
+
+  return result;
+}
+
+u64 args_get_integer_value(Args *args, String option, u64 default_)
+{
+  u64 result = default_;
+
+  String_Array values = args_get_option_values(args, option);
+  if (values.count > 0)
+  {
+    result = string_to_u64(values.v[0]);
+  }
+
+  return result;
+}
+
+String args_get_string_value(Args *args, String option, String default_)
+{
+  String result = default_;
+
+  String_Array values = args_get_option_values(args, option);
+  if (values.count > 0)
+  {
+    result = values.v[0];
+  }
+
+  return result;
 }
 
 #endif // COMMON_IMPLEMENTATION

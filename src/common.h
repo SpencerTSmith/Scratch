@@ -1597,6 +1597,19 @@ u64 args_get_integer_value(Args *args, String option, u64 default_)
   return result;
 }
 
+f64 args_get_f64_value(Args *args, String option, f64 default_)
+{
+  f64 result = default_;
+
+  String_Array values = args_get_option_values(args, option);
+  if (values.count > 0)
+  {
+    result = string_to_f64(values.v[0]);
+  }
+
+  return result;
+}
+
 String args_get_string_value(Args *args, String option, String default_)
 {
   String result = default_;

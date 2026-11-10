@@ -72,6 +72,8 @@ typedef ptrdiff_t isize;
 #define _STRINGIFY(a) #a
 #define STRINGIFY(a) _STRINGIFY(a)
 
+#define ENUM_BIT(enum_value) (1 << (enum_value))
+
 #define STATEMENT(s) do { s } while (0)
 
 #define CLAMP(value, min, max) (((value) < (min)) ? (min) : ((value) > (max)) ? (max) : (value))
@@ -86,7 +88,7 @@ typedef ptrdiff_t isize;
 #define PI 3.14159265358979323846
 #define RADIANS(degrees) ((degrees) * (PI / 180.0))
 
-#define STATIC_ARRAY_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
+#define STATIC_ARRAY_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
  // Slowly replacing the above with this, shorthand
 #define STATIC_COUNT(arr) STATIC_ARRAY_COUNT(arr)
 
@@ -467,6 +469,13 @@ void scratch_close(Scratch *scratch);
 // STRINGS
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+typedef struct Stream Stream;
+struct Stream
+{
+  String buffer;
+  usize  cursor;
+};
+
 #define String(s) (String){(u8 *)(s), STATIC_COUNT(s) - 1}
 #define String_Format(s) (int)(s).count, (s).v
 #define STR(s) String((s))
@@ -516,6 +525,8 @@ usize file_size(const char *name);
 
 // Reads the entire thing and returns a String (just a byte slice)
 String read_file_to_arena(Arena *arena, String name);
+
+String stream_get_next_line(Stream *stream);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // ARGUMENTS
@@ -567,6 +578,24 @@ String args_get_string_value(Args *args, String option, String default_);
 
 #define COMMON_IMPLEMENTATION
 #ifdef COMMON_IMPLEMENTATION
+
+b32 mem_is_zero(void *ptr, usize size)
+{
+  b32 result = true;
+  for (usize i = 0; i < size; i++)
+  {
+    if (((u8*)ptr)[i])
+    {
+      result = false;
+      break;
+    }
+  }
+
+  return result;
+}
+
+#define STRUCT_IS_ZERO(ptr)  (mem_is_zero(ptr, sizeof(*(ptr))))
+
 // Returns size of file, or 0 if it can't open the file
 usize read_file_to_memory(const char *name, u8 *buffer, usize buffer_size)
 {
@@ -786,9 +815,12 @@ String string_from_c_string(char *pointer)
     .count = 0,
   };
 
-  for (char *cursor = pointer; *cursor; cursor++)
+  if (pointer)
   {
-    result.count += 1;
+    for (char *cursor = pointer; *cursor; cursor++)
+    {
+      result.count += 1;
+    }
   }
 
   return result;
@@ -1143,29 +1175,37 @@ String string_join_list(Arena *arena, String_List list, String separator)
   return result;
 }
 
-String string_formatted(Arena *arena, const char* format, ...)
+String string_formatted_list(Arena *arena, const char* format, va_list list)
 {
   // Need 2 copies since using a var args will empty it out?!
-  va_list var_args0;
-  va_start(var_args0, format);
+  va_list list2;
+  va_copy(list2, list);
 
   // It returns the # of characters minus the null terminator it wants to stomp down.
   // Add 1, so that it won't stomp the null terminator over the last actually desired character.
-  usize wish_size = vsnprintf(0, 0, format, var_args0) + 1;
-
-  va_end(var_args0);
-
-  va_list var_args1;
-  va_start(var_args1, format);
+  usize wish_size = vsnprintf(0, 0, format, list) + 1;
 
   String result =
   {
     .v = arena_calloc(arena, wish_size, u8),
   };
 
-  result.count = vsnprintf((char *)result.v, wish_size, format, var_args1);
+  result.count = vsnprintf((char *)result.v, wish_size, format, list2);
 
-  va_end(var_args1);
+  va_end(list2);
+
+  return result;
+}
+
+String string_formatted(Arena *arena, const char* format, ...)
+{
+  // C sucks.
+  va_list list;
+  va_start(list, format);
+
+  String result = string_formatted_list(arena, format, list);
+
+  va_end(list);
 
   return result;
 }
@@ -1185,6 +1225,79 @@ String string_timestamp(Arena *arena)
 
   String result = string_formatted(arena, "%d-%d-%d_%d:%d:%d",
                                    year, month, day, hour, min, sec);
+
+  return result;
+}
+
+// TODO: Non linux.
+String file_basename(String filename)
+{
+  usize start = 0;
+  usize stop = 0;
+  for (usize i = 0; i < filename.count; i++)
+  {
+    if (filename.v[i] == '/')
+    {
+      start = i + 1;
+    }
+
+    if (filename.v[i] == '.')
+    {
+      stop = i;
+      break;
+    }
+  }
+
+  return string_substring(filename, start, stop);
+}
+
+#include <dirent.h>
+String_List folder_children(Arena *arena, String folder)
+{
+  String_List list = {0};
+  char *c_folder = string_to_c_string(arena, folder);
+  DIR *dir = opendir(c_folder);
+
+  if (dir)
+  {
+    for (struct dirent *entry = readdir(dir); entry; entry = readdir(dir))
+    {
+      String name = string_from_c_string(entry->d_name);
+
+      if (string_match(name, STR(".")) || string_match(name, STR("..")))
+      {
+        continue;
+      }
+
+      String_Node *item = arena_new(arena, String_Node);
+      item->value = string_formatted(arena, "%.*s/%.*s", STRF(folder), STRF(name));
+      list_push_last(&list, item);
+    }
+
+    closedir(dir);
+  }
+
+  return list;
+}
+
+b32 string_valid(String string)
+{
+  return string.v != 0 && string.count != 0;
+}
+
+String stream_get_next_line(Stream *stream)
+{
+  usize index = stream->cursor;
+  for (; index < stream->buffer.count; index++)
+  {
+    if (stream->buffer.v[index] == '\n')
+    {
+      break;
+    }
+  }
+
+  String result = string_substring(stream->buffer, stream->cursor, index + 1);
+  stream->cursor = index + 1;
 
   return result;
 }
@@ -1234,11 +1347,11 @@ void *os_allocate(usize size, OS_Allocation_Flags flags)
   u32 map_flags = MAP_PRIVATE|MAP_ANONYMOUS;
   if (flags & OS_ALLOCATION_2MB_PAGES)
   {
-    map_flags |= (MAP_HUGETLB|MAP_HUGE_2MB);
+    map_flags |= (MAP_HUGETLB);
   }
   else if (flags & OS_ALLOCATION_1GB_PAGES) // Can't have both
   {
-    map_flags |= (MAP_HUGETLB|MAP_HUGE_1GB);
+    map_flags |= (MAP_HUGETLB);
   }
 
   if (flags & OS_ALLOCATION_PREFAULT)
@@ -1409,8 +1522,8 @@ void *arena_alloc(Arena *arena, usize size, usize alignment) {
 
 void arena_pop_to(Arena *arena, usize offset)
 {
-  ASSERT(offset < arena->next_offset,
-         "Failed to pop arena allocation, more than currently allocated");
+  // ASSERT(offset < arena->next_offset,
+  //        "Failed to pop arena allocation, more than currently allocated");
 
   // Should we zero out the memory?
   arena->next_offset = offset;

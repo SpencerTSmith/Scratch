@@ -6,9 +6,20 @@ static
 void repetition_tester_begin_time(Repetition_Tester *tester)
 {
   Repetition_Test *curr = &tester->current_test;
-  curr->begin_block_count += 1;
   curr->accum.v[REPTEST_VALUE_TIME] -= read_cpu_timer();
   curr->accum.v[REPTEST_VALUE_PAGE_FAULTS]  -= read_os_page_faults();
+
+  if (tester->cache_events_handle)
+  {
+    open_cpu_pmc_event_counting(tester->cache_events_handle);
+  }
+
+  if (tester->branch_events_handle)
+  {
+    open_cpu_pmc_event_counting(tester->branch_events_handle);
+  }
+
+  curr->begin_block_count += 1;
 }
 
 static
@@ -17,6 +28,17 @@ void repetition_tester_close_time(Repetition_Tester *tester)
   Repetition_Test *curr = &tester->current_test;
   curr->accum.v[REPTEST_VALUE_TIME] += read_cpu_timer();
   curr->accum.v[REPTEST_VALUE_PAGE_FAULTS] += read_os_page_faults();
+
+  if (tester->cache_events_handle)
+  {
+    curr->accum.v[REPTEST_VALUE_CACHE_COUNT] += close_cpu_pmc_event_counting(tester->cache_events_handle);
+  }
+
+  if (tester->branch_events_handle)
+  {
+    curr->accum.v[REPTEST_VALUE_BRANCH_COUNT] += close_cpu_pmc_event_counting(tester->branch_events_handle);
+  }
+
   curr->close_block_count += 1;
 }
 
@@ -44,8 +66,14 @@ void repetition_tester_count_memops(Repetition_Tester *tester, u64 count)
 static
 void repetition_tester_error(Repetition_Tester *tester, const char *message)
 {
-  LOG_ERROR("%s", message);
+  printf("REPTEST_ERROR: %s\n", message);
   tester->mode = REPTEST_MODE_ERROR;
+}
+
+static
+const char *plural(u64 value, const char *plural_string)
+{
+  return value > 1 ? plural_string : "";
 }
 
 static
@@ -55,43 +83,63 @@ void print_repetition_test_values(const char *label, Repetition_Test_Values valu
 
   u64 time = values.v[REPTEST_VALUE_TIME] / divisor;
   printf("%s: %lu", label, time);
+
+  f64 seconds = 0.0;
   if (cpu_timer_frequency)
   {
-    f64 seconds = cpu_time_in_seconds(time, cpu_timer_frequency);
+    seconds = cpu_time_in_seconds(time, cpu_timer_frequency);
     printf(" (%.4fms)", 1000.0 * seconds);
+  }
 
-    u64 byte_count = values.v[REPTEST_VALUE_BYTE_COUNT] / divisor;
+  u64 byte_count = values.v[REPTEST_VALUE_BYTE_COUNT] / divisor;
+  if (byte_count && seconds)
+  {
+    f64 gb_per_s = (f64)byte_count / (f64)GB(1) / seconds;
+
+    printf(" %.4f GB/s", gb_per_s);
+  }
+
+  u64 page_faults = values.v[REPTEST_VALUE_PAGE_FAULTS] / divisor;
+  if (page_faults)
+  {
+    f64 kb_per_fault = ((f64)byte_count / KB(1)) / (f64)page_faults;
+
+    printf(", %lu fault%s", page_faults, plural(page_faults, "s"));
+
     if (byte_count)
     {
-      f64 gb_per_s = (f64)byte_count / (f64)GB(1) / seconds;
-
-      printf(" %.4f GB/s", gb_per_s);
+      printf("(%.2f kb/fault)", kb_per_fault);
     }
+  }
 
-    u64 page_faults = values.v[REPTEST_VALUE_PAGE_FAULTS] / divisor;
-    if (page_faults)
-    {
-      f64 kb_per_fault = ((f64)byte_count / KB(1)) / (f64)page_faults;
+  u64 flops = values.v[REPTEST_VALUE_FLOP_COUNT] / divisor;
+  if (flops)
+  {
+    printf(", %lu flop%s", flops, plural(flops, "s"));
+  }
 
-      printf(", %lu faults (%.4f kb/fault)", page_faults, kb_per_fault);
-    }
+  u64 memops = values.v[REPTEST_VALUE_MEMOP_COUNT] / divisor;
+  if (memops)
+  {
+    printf(", %lu memop%s", memops, plural(memops, "s"));
+  }
 
-    u64 flops = values.v[REPTEST_VALUE_FLOP_COUNT] / divisor;
-    if (flops)
-    {
-      printf(", %lu flops", flops);
-    }
+  u64 cache_misses = values.v[REPTEST_VALUE_CACHE_COUNT] / divisor;
+  if (cache_misses)
+  {
+    printf(", %lu cache miss%s", cache_misses, plural(cache_misses, "es"));
+  }
 
-    u64 memops = values.v[REPTEST_VALUE_MEMOP_COUNT] / divisor;
-    if (memops)
-    {
-      printf(", %lu memops", memops);
-    }
+  u64 branch_misses = values.v[REPTEST_VALUE_BRANCH_COUNT] / divisor;
+  if (branch_misses)
+  {
+    printf(", %lu branch miss%s", branch_misses, plural(branch_misses, "es"));
   }
 }
 
 static
-void repetition_tester_new_wave(Repetition_Tester *tester, u64 target_processed_byte_count, u64 cpu_timer_frequency, u32 seconds_to_try_for_min)
+void repetition_tester_new_wave(Repetition_Tester *tester, u64 target_processed_byte_count,
+                                u64 cpu_timer_frequency, u32 seconds_to_try_for_min)
 {
   if (tester->mode == REPTEST_MODE_UNINITIALIZED)
   {
@@ -99,7 +147,22 @@ void repetition_tester_new_wave(Repetition_Tester *tester, u64 target_processed_
     tester->target_processed_byte_count = target_processed_byte_count;
     tester->cpu_timer_frequency = cpu_timer_frequency;
     tester->results.min.v[REPTEST_VALUE_TIME] = (u64)-1;
+
+    tester->cache_events_handle = make_cpu_pmc_event(CPU_PMC_CACHE);
+    tester->branch_events_handle = make_cpu_pmc_event(CPU_PMC_BRANCH);
+
+    if (tester->cache_events_handle == 0)
+    {
+      repetition_tester_error(tester, "Repetition Tester unable to open cache event tracing");
+    }
+
+    if (tester->branch_events_handle == 0)
+    {
+      repetition_tester_error(tester, "Repetition Tester unable to open branch event tracing");
+    }
   }
+
+  // TODO: Perhaps remove this, I've never really wanted to re-use a tester after completion.
   else if (tester->mode == REPTEST_MODE_COMPLETE)
   {
     tester->mode = REPTEST_MODE_TESTING;
@@ -117,6 +180,26 @@ void repetition_tester_new_wave(Repetition_Tester *tester, u64 target_processed_
 
   tester->try_for_min_time = seconds_to_try_for_min * cpu_timer_frequency;
   tester->tests_start_time = read_cpu_timer();
+}
+
+static
+Repetition_Tester repetition_series_new_tester(Repetition_Series *series,
+                                               u64 target_processed_byte_count,
+                                               u64 cpu_timer_frequency,
+                                               u32 seconds_to_try_for_min,
+                                               const char *stdout_title, ...)
+{
+  va_list list;
+  va_start(list, stdout_title);
+  vprintf(stdout_title, list);
+  printf("\n");
+  va_end(list);
+
+  Repetition_Tester result = {0};
+  repetition_tester_new_wave(&result, target_processed_byte_count,
+                             cpu_timer_frequency, seconds_to_try_for_min);
+
+  return result;
 }
 
 static
@@ -164,9 +247,9 @@ b32 repetition_tester_is_testing(Repetition_Tester *tester)
           // Restart time to find new min
           tester->tests_start_time = current_time;
 
-          printf("                                                                                        \r");
+
+          printf("                                                                                                                        \r");
           print_repetition_test_values("MIN", results->min, tester->cpu_timer_frequency, 1);
-          printf("\r");
           fflush(stdout);
         }
 
@@ -178,6 +261,8 @@ b32 repetition_tester_is_testing(Repetition_Tester *tester)
         {
           tester->mode = REPTEST_MODE_COMPLETE;
 
+          printf("                                                                                                                     \r");
+          fflush(stdout);
           print_repetition_test_values("MIN", results->min, tester->cpu_timer_frequency, 1);
           printf("\n");
 
@@ -197,4 +282,230 @@ b32 repetition_tester_is_testing(Repetition_Tester *tester)
   }
 
   return tester->mode == REPTEST_MODE_TESTING;
+}
+
+static
+Repetition_Series_Entry *repetition_series_current_entry(Repetition_Series *series)
+{
+  return &series->entries[series->current_entry];
+}
+
+static
+b32 repetition_series_is_testing(Repetition_Series *series, Repetition_Tester *tester)
+{
+  b32 testing = repetition_tester_is_testing(tester);
+
+  // We either had and error or completed testing, so save what we have and advance to next spot
+  // in series matrix.
+  if (!testing)
+  {
+    // Save.
+    Repetition_Series_Entry *entry = repetition_series_current_entry(series);
+    entry->results = tester->results;
+
+    // Advance.
+    series->current_entry += 1;
+  }
+
+  return testing;
+}
+
+static
+void repetition_tester_csv_header(Repetition_Tester *tester,
+                                  Repetition_Test_Value dump_value_flags, FILE *out,
+                                  String_Array extra_columns)
+{
+  for (u64 i = 0; i < extra_columns.count; i++)
+  {
+    fprintf(out, "%.*s,", STRF(extra_columns.v[i]));
+  }
+
+  const char *value_names[REPTEST_VALUE_COUNT] =
+  {
+    "none",
+    "time",
+    "faults",
+    "bytes",
+    "flops",
+    "memops",
+    "cache",
+    "branch",
+  };
+
+  for (Repetition_Test_Value value = REPTEST_VALUE_NONE + 1; value < REPTEST_VALUE_COUNT; value++)
+  {
+    if (dump_value_flags & (1 << value))
+    {
+      fprintf(out, "%s,", value_names[value]);
+    }
+  }
+  fprintf(out, "\n");
+}
+
+static
+void repetition_tester_csv_row(Repetition_Tester *tester,
+                               Repetition_Test_Value dump_value_flags, FILE *out)
+{
+  for (Repetition_Test_Value value = REPTEST_VALUE_NONE + 1; value < REPTEST_VALUE_COUNT; value++)
+  {
+    if (dump_value_flags & (1 << value))
+    {
+      fprintf(out, "%lu,", tester->results.min.v[value]);
+    }
+  }
+}
+
+static
+Repetition_Series *__repetition_series_make(usize max_entry_count,
+                                            const char *user_fields[], usize user_field_count)
+{
+  Arena arena = arena_make(.reserve_size=GB(1));
+
+  Repetition_Series *result = arena_new(&arena, Repetition_Series);
+  result->arena = arena;
+
+  result->entries_count = max_entry_count;
+  result->entries = arena_calloc(&result->arena, result->entries_count, Repetition_Series_Entry);
+
+  result->user_field_labels = arena_array(&result->arena, user_field_count, String);
+
+  for (usize field_label_idx = 0; field_label_idx < user_field_count; field_label_idx++)
+  {
+    result->user_field_labels.v[field_label_idx] =
+      string_from_c_string((char *)user_fields[field_label_idx]);
+
+    for (usize entry_index = 0; entry_index < result->entries_count; entry_index++)
+    {
+      result->entries[entry_index].user_field_values = arena_array(&result->arena, user_field_count, String);
+    }
+  }
+
+  return result;
+}
+
+static
+void repetition_series_set_field(Repetition_Series *series, const char *field,
+                                 const char *format, ...)
+{
+  va_list list;
+  va_start(list, format);
+  String field_value = string_formatted_list(&series->arena, format, list);
+  va_end(list);
+
+  Scratch scratch = scratch_begin(&series->arena);
+  String field_string = string_from_c_string((char *)field);
+
+  b32 found = false;
+
+  // TODO: This may be better served with a hash... but I don't expect having many extra fields,
+  // at least for my use cases... so a loop is probably fine, faster even, at low number of extra
+  // fields
+  for (usize field_idx = 0; field_idx < series->user_field_labels.count; field_idx++)
+  {
+    if (string_match(field_string, series->user_field_labels.v[field_idx]))
+    {
+      repetition_series_current_entry(series)->user_field_values.v[field_idx] =
+        field_value;
+      found = true;
+
+      break;
+    }
+  }
+
+  if (!found)
+  {
+    // TODO: Unify error message handling for series.
+    printf("REPTEST_ERROR: tried to set field: %s for entry %lu that doesn't exist\n",
+           field, series->current_entry);
+  }
+
+  scratch_close(&scratch);
+}
+
+static
+void repetition_series_save_csv(Repetition_Series *series, const char *filename, ...)
+{
+  Scratch scratch = scratch_begin(&series->arena);
+
+  // Excuse the terrible round tripping for formatted strings.
+  va_list list;
+  va_start(list, filename);
+  String filename_string = string_formatted_list(scratch.arena, filename, list);
+  va_end(list);
+  FILE *file = fopen(string_to_c_string(scratch.arena, filename_string), "w");
+
+  if (file)
+  {
+    // User fields
+    for (usize field_idx = 0; field_idx < series->user_field_labels.count; field_idx++)
+    {
+      fprintf(file, "%.*s,", STRF(series->user_field_labels.v[field_idx]));
+    }
+    // Reptest fields
+    const char *value_names[REPTEST_VALUE_COUNT] =
+    {
+      "none",
+      "time",
+      "faults",
+      "bytes",
+      "flops",
+      "memops",
+      "cache",
+      "branch",
+    };
+    for (Repetition_Test_Value value = REPTEST_VALUE_NONE + 1;
+         value < REPTEST_VALUE_COUNT;
+         value++)
+    {
+      fprintf(file, "%s", value_names[value]);
+      if (value != REPTEST_VALUE_COUNT - 1)
+      {
+        fprintf(file, ",");
+      }
+    }
+
+    fprintf(file, "\n");
+
+    for (usize entry_idx = 0; entry_idx < series->current_entry; entry_idx++)
+    {
+      Repetition_Series_Entry *entry = series->entries + entry_idx;
+
+      for (usize field_idx = 0; field_idx < entry->user_field_values.count; field_idx++)
+      {
+        fprintf(file, "%.*s,", STRF(entry->user_field_values.v[field_idx]));
+      }
+
+      for (Repetition_Test_Value value = REPTEST_VALUE_NONE + 1;
+           value < REPTEST_VALUE_COUNT;
+           value++)
+      {
+        fprintf(file, "%lu", entry->results.min.v[value]);
+        if (value != REPTEST_VALUE_COUNT - 1)
+        {
+          fprintf(file, ",");
+        }
+      }
+
+      fprintf(file, "\n");
+    }
+
+    printf("REPTEST_INFO: Saved series to: %.*s\n", STRF(filename_string));
+
+    fclose(file);
+  }
+  else
+  {
+    // TODO: Unify error message handling for series.
+    printf("REPTEST_ERROR: Unable to open CSV file: %.*s for writing.\n",
+           STRF(filename_string));
+  }
+
+  scratch_close(&scratch);
+}
+
+static
+void repetition_series_free(Repetition_Series *series)
+{
+  arena_free(&series->arena);
+  ZERO_STRUCT(&series);
 }

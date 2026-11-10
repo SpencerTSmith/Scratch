@@ -23,6 +23,8 @@ typedef enum Repetition_Test_Value
   REPTEST_VALUE_BYTE_COUNT,
   REPTEST_VALUE_FLOP_COUNT,
   REPTEST_VALUE_MEMOP_COUNT,
+  REPTEST_VALUE_CACHE_COUNT,
+  REPTEST_VALUE_BRANCH_COUNT,
 
   REPTEST_VALUE_COUNT,
 } Repetition_Test_Value;
@@ -62,6 +64,28 @@ struct Repetition_Tester
 
   Repetition_Test current_test;
   Repetition_Tester_Results results;
+
+  u64 cache_events_handle;
+  u64 branch_events_handle;
+};
+
+typedef struct Repetition_Series_Entry Repetition_Series_Entry;
+struct Repetition_Series_Entry
+{
+  Repetition_Tester_Results results;
+  String_Array user_field_values;
+};
+
+typedef struct Repetition_Series Repetition_Series;
+struct Repetition_Series
+{
+  // Memory for this system.
+  Arena arena;
+
+  String_Array            user_field_labels;
+  usize                   current_entry;
+  usize                   entries_count;
+  Repetition_Series_Entry *entries;
 };
 
 static
@@ -92,15 +116,34 @@ void repetition_tester_new_wave(Repetition_Tester *tester, u64 target_processed_
 static
 b32 repetition_tester_is_testing(Repetition_Tester *tester);
 
-// You provide the definitions for these
-typedef struct Operation_Parameters Operation_Parameters;
-typedef void Operation_Function(Repetition_Tester *tester, Operation_Parameters *params);
+static
+Repetition_Series *__repetition_series_make(usize max_entry_count,
+                                            const char *user_fields[], usize field_count);
 
-typedef struct Operation_Entry Operation_Entry;
-struct Operation_Entry
-{
-  String name;
-  Operation_Function *function;
-};
+// NOTE: Important! Found this out the hard way... need to use parentheses around the fields arg
+// macros do not parse out brackets! e.g.
+//
+// Repetition_Series *series = repetition_series_make(60 * STATIC_COUNT(entries), ((const char *[]){"buffer_size", "function"}));
+//
+// See the parentheses around the array argument!
+#define repetition_series_make(max_entry_count, fields) \
+  __repetition_series_make(max_entry_count, (fields), STATIC_COUNT(fields))
+
+static
+void repetition_series_free(Repetition_Series *series);
+
+static
+void repetition_series_set_field(Repetition_Series *series, const char *field,
+                                 const char *format, ...);
+
+static
+void repetition_series_save_csv(Repetition_Series *series, const char *filename, ...);
+
+static
+Repetition_Tester repetition_series_new_tester(Repetition_Series *series,
+                                               u64 target_processed_byte_count,
+                                               u64 cpu_timer_frequency,
+                                               u32 seconds_to_try_for_min,
+                                               const char *stdout_title, ...);
 
 #endif // REPETITION_TEST_H
